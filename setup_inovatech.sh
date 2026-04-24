@@ -1422,7 +1422,7 @@ list_files() {
     ! -name "*.sqlite3" \
     ! -name "*.db" \
     ! -name "package-lock.json" \
-    | sort
+    | LC_ALL=C sort
 }
 
 MANIFEST_FILE="${COMPROVANTE_DIR}/manifesto_entrega_${DATESTAMP}.txt"
@@ -1432,28 +1432,39 @@ info "Calculando hashes dos arquivos entregues..."
 echo ""
 
 {
-  echo "# =============================================================="
-  echo "# INOVATECH – Manifesto de Entrega do Candidato"
+  echo "# ============================================="
+  echo "# INOVATECH – Manifesto de Entrega"
   echo "# Candidato  : ${CANDIDATO_NOME}"
-  echo "# Código PP  : ${CODIGO_PP}  (PP = prova prática, nota técnica)"
+  echo "# Código PP  : ${CODIGO_PP}"
   echo "# Data/Hora  : ${TIMESTAMP}"
   echo "# Algoritmo  : SHA-256"
-  echo "# =============================================================="
+  echo "# Hash raiz  : SHA-256 da concatenação dos"
+  echo "#   hashes individuais em ordem lexicográfica"
+  echo "# ============================================="
   echo ""
 } > "${MANIFEST_FILE}"
 
-ALL_HASHES=""
+HASH_LINES_FILE=$(mktemp)
+trap 'rm -f "${HASH_LINES_FILE}"' EXIT
 FILE_COUNT=0
 
 while IFS= read -r filepath; do
   rel="${filepath#${ENTREGA_DIR}/}"
-  file_hash=$(sha256sum "${filepath}" | awk '{print $1}')
-  printf "%-64s  %s\n" "${file_hash}" "${rel}" >> "${MANIFEST_FILE}"
-  ALL_HASHES="${ALL_HASHES}${file_hash}"
+  file_hash=$(
+    sha256sum "${filepath}" | awk '{print $1}'
+  )
+  printf "%-64s  %s\n" \
+    "${file_hash}" "${rel}" >> "${MANIFEST_FILE}"
+  echo "${file_hash}" >> "${HASH_LINES_FILE}"
   FILE_COUNT=$((FILE_COUNT + 1))
 done < <(list_files "${ENTREGA_DIR}")
 
-ENTREGA_HASH=$(echo -n "${ALL_HASHES}" | sha256sum | awk '{print $1}')
+SORTED_HASHES=$(LC_ALL=C sort "${HASH_LINES_FILE}" \
+  | tr -d '\n')
+ENTREGA_HASH=$(
+  echo -n "${SORTED_HASHES}" \
+    | sha256sum | awk '{print $1}'
+)
 
 {
   echo ""
@@ -1608,22 +1619,25 @@ list_files() {
     ! -name "*.sqlite3" \
     ! -name "*.db" \
     ! -name "package-lock.json" \
-    | sort
+    | LC_ALL=C sort
 }
 
 info "Gerando manifesto de hashes por arquivo..."
 echo ""
 
 {
-  echo "# =============================================================="
-  echo "# INOVATECH – Manifesto de Integridade dos Projetos Base"
+  echo "# ============================================="
+  echo "# INOVATECH – Manifesto de Integridade"
   echo "# Gerado em  : ${TIMESTAMP}"
   echo "# Algoritmo  : SHA-256"
-  echo "# =============================================================="
+  echo "# Hash raiz  : SHA-256 da concatenação dos"
+  echo "#   hashes individuais em ordem lexicográfica"
+  echo "# ============================================="
   echo ""
 } > "${MANIFEST_FILE}"
 
-ALL_HASHES=""
+HASH_LINES_FILE=$(mktemp)
+trap 'rm -f "${HASH_LINES_FILE}"' EXIT
 
 for proj in "${PROJECT_DIRS[@]}"; do
   dir="${BASE_DIR}/${proj}"
@@ -1632,16 +1646,24 @@ for proj in "${PROJECT_DIRS[@]}"; do
   file_count=0
   while IFS= read -r filepath; do
     rel="${filepath#${BASE_DIR}/}"
-    file_hash=$(sha256sum "${filepath}" | awk '{print $1}')
-    printf "%-64s  %s\n" "${file_hash}" "${rel}" >> "${MANIFEST_FILE}"
-    ALL_HASHES="${ALL_HASHES}${file_hash}"
+    file_hash=$(
+      sha256sum "${filepath}" | awk '{print $1}'
+    )
+    printf "%-64s  %s\n" \
+      "${file_hash}" "${rel}" >> "${MANIFEST_FILE}"
+    echo "${file_hash}" >> "${HASH_LINES_FILE}"
     file_count=$((file_count + 1))
   done < <(list_files "${dir}")
   echo "" >> "${MANIFEST_FILE}"
   success "  ${proj}/ → ${file_count} arquivos"
 done
 
-ROOT_HASH=$(echo -n "${ALL_HASHES}" | sha256sum | awk '{print $1}')
+SORTED_HASHES=$(LC_ALL=C sort "${HASH_LINES_FILE}" \
+  | tr -d '\n')
+ROOT_HASH=$(
+  echo -n "${SORTED_HASHES}" \
+    | sha256sum | awk '{print $1}'
+)
 
 {
   echo ""
@@ -1781,26 +1803,34 @@ list_files() {
     ! -name "*.sqlite3" \
     ! -name "*.db" \
     ! -name "package-lock.json" \
-    | sort
+    | LC_ALL=C sort
 }
 
 info "Calculando hashes (pode levar alguns segundos)..."
 echo ""
 
-ALL_HASHES=""
+HASH_LINES_FILE=$(mktemp)
+trap 'rm -f "${HASH_LINES_FILE}"' EXIT
 
 for proj in "${PROJECT_DIRS[@]}"; do
   dir="${BASE_DIR}/${proj}"
   file_count=0
   while IFS= read -r filepath; do
-    file_hash=$(sha256sum "${filepath}" | awk '{print $1}')
-    ALL_HASHES="${ALL_HASHES}${file_hash}"
+    file_hash=$(
+      sha256sum "${filepath}" | awk '{print $1}'
+    )
+    echo "${file_hash}" >> "${HASH_LINES_FILE}"
     file_count=$((file_count + 1))
   done < <(list_files "${dir}")
   success "  ${proj}/ → ${file_count} arquivos"
 done
 
-ROOT_HASH=$(echo -n "${ALL_HASHES}" | sha256sum | awk '{print $1}')
+SORTED_HASHES=$(LC_ALL=C sort "${HASH_LINES_FILE}" \
+  | tr -d '\n')
+ROOT_HASH=$(
+  echo -n "${SORTED_HASHES}" \
+    | sha256sum | awk '{print $1}'
+)
 
 echo ""
 echo "=============================================================="
