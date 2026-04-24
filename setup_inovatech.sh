@@ -449,26 +449,25 @@ class ItemSerializer(serializers.ModelSerializer):
 SERIALIZERS
 
   cat > "${DJANGO_DIR}/core/views.py" << 'VIEWS'
-from rest_framework import viewsets
+from rest_framework.generics import ListAPIView
 from rest_framework.permissions import AllowAny
 from .models import Item
 from .serializers import ItemSerializer
 
 
-class ItemViewSet(viewsets.ModelViewSet):
+class ItemListView(ListAPIView):
     queryset = Item.objects.all()
     serializer_class = ItemSerializer
     permission_classes = [AllowAny]
 VIEWS
 
   cat > "${DJANGO_DIR}/core/urls.py" << 'CORE_URLS'
-from rest_framework.routers import DefaultRouter
-from .views import ItemViewSet
+from django.urls import path
+from .views import ItemListView
 
-router = DefaultRouter()
-router.register("items", ItemViewSet)
-
-urlpatterns = router.urls
+urlpatterns = [
+    path("items/", ItemListView.as_view(), name="item-list"),
+]
 CORE_URLS
 
   cat > "${DJANGO_DIR}/config/urls.py" << 'CONFIG_URLS'
@@ -547,61 +546,27 @@ DB
 from sqlmodel import SQLModel, Field
 
 
-class ItemBase(SQLModel):
+class Item(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
     name: str
     description: str = ""
-
-
-class Item(ItemBase, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-
-
-class ItemRead(ItemBase):
-    id: int
-
-
-class ItemCreate(ItemBase):
-    pass
 ITEM_MODEL
 
   : > "${FASTAPI_DIR}/api/models/__init__.py"
   : > "${FASTAPI_DIR}/api/routers/__init__.py"
 
   cat > "${FASTAPI_DIR}/api/routers/items.py" << 'ITEMS_ROUTER'
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 from api.core.database import get_session
-from api.models.item import Item, ItemCreate, ItemRead
+from api.models.item import Item
 
 router = APIRouter(prefix="/items", tags=["items"])
 
 
-@router.get("/", response_model=list[ItemRead])
+@router.get("/")
 def list_items(session: Session = Depends(get_session)):
     return session.exec(select(Item)).all()
-
-
-@router.post("/", response_model=ItemRead, status_code=201)
-def create_item(
-    payload: ItemCreate,
-    session: Session = Depends(get_session),
-):
-    item = Item.model_validate(payload)
-    session.add(item)
-    session.commit()
-    session.refresh(item)
-    return item
-
-
-@router.get("/{item_id}", response_model=ItemRead)
-def get_item(
-    item_id: int,
-    session: Session = Depends(get_session),
-):
-    item = session.get(Item, item_id)
-    if not item:
-        raise HTTPException(404, "Item not found")
-    return item
 ITEMS_ROUTER
 
   cat > "${FASTAPI_DIR}/main.py" << 'MAIN'
@@ -750,12 +715,6 @@ router.get("/", async (_req: Request, res: Response) => {
   res.json(items);
 });
 
-router.post("/", async (req: Request, res: Response) => {
-  const item = repo().create(req.body);
-  const saved = await repo().save(item);
-  res.status(201).json(saved);
-});
-
 export default router;
 ROUTES
 
@@ -860,6 +819,8 @@ HTML
   --white: #ffffff;
   --text: #333333;
   --text-muted: #6b7280;
+  --green: #16a34a;
+  --red: #dc2626;
   --radius: 12px;
 }
 
@@ -900,7 +861,7 @@ body {
 
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1.25rem;
 }
 
@@ -920,54 +881,82 @@ body {
 .card h2 {
   font-size: 1rem;
   color: var(--navy);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
-.card p {
-  font-size: 0.85rem;
+.card .tech {
+  font-size: 0.8rem;
   color: var(--text-muted);
-  line-height: 1.5;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
-.card code {
-  display: block;
+.card .links {
   font-size: 0.78rem;
   background: var(--gray-bg);
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
   color: var(--navy-light);
+  margin-bottom: 0.75rem;
   word-break: break-all;
 }
+
+.card .links a { color: var(--navy-light); }
+
+.btn-fetch {
+  display: inline-block;
+  padding: 0.4rem 1rem;
+  font-size: 0.8rem;
+  border: 1px solid var(--navy);
+  border-radius: 6px;
+  background: var(--white);
+  color: var(--navy);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-fetch:hover {
+  background: var(--navy);
+  color: var(--white);
+}
+
+.result {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  min-height: 1.2em;
+}
+
+.result.ok  { color: var(--green); }
+.result.err { color: var(--red); }
 CSS
 
   cat > src/main.ts << 'MAIN_TS'
+import axios from "axios";
 import "./style.css";
 
-interface BackendCard {
+interface Backend {
   title: string;
-  description: string;
-  url: string;
+  tech: string;
+  api: string;
   docs: string;
 }
 
-const backends: BackendCard[] = [
+const backends: Backend[] = [
   {
     title: "Django + DRF",
-    description: "Python 3.12 · Django 5.2 · REST Framework",
-    url: "http://localhost:8000/api/items/",
+    tech: "Python 3.12 · Django 5.2 · REST Framework",
+    api: "http://localhost:8000/api/items/",
     docs: "http://localhost:8000/api/docs/",
   },
   {
     title: "FastAPI + SQLModel",
-    description: "Python 3.12 · FastAPI · Pydantic v2",
-    url: "http://localhost:8000/items/",
+    tech: "Python 3.12 · FastAPI · Pydantic v2",
+    api: "http://localhost:8000/items/",
     docs: "http://localhost:8000/docs",
   },
   {
     title: "Express + TypeORM",
-    description: "Node.js 22 · TypeScript · SQLite",
-    url: "http://localhost:3000/items",
+    tech: "Node.js 22 · TypeScript · SQLite",
+    api: "http://localhost:3000/items",
     docs: "http://localhost:3000/health",
   },
 ];
@@ -976,27 +965,61 @@ function render(): void {
   const app = document.getElementById("app")!;
   app.innerHTML = `
     <div class="header">
-      <img src="/logo-inovatech.png"
-           alt="INOVATECH" />
+      <img src="/logo-inovatech.png" alt="INOVATECH" />
       <h1>Residência em Inovação Tecnológica</h1>
     </div>
     <div class="cards">
       ${backends.map(cardHTML).join("")}
     </div>
   `;
+
+  document.querySelectorAll<HTMLButtonElement>(".btn-fetch")
+    .forEach((btn) => {
+      btn.addEventListener("click", () => fetchItems(btn));
+    });
 }
 
-function cardHTML(b: BackendCard): string {
+function cardHTML(b: Backend, i: number): string {
   return `
     <div class="card">
       <h2>${b.title}</h2>
-      <p>${b.description}</p>
-      <code>
-        API: <a href="${b.url}" target="_blank">${b.url}</a><br/>
+      <p class="tech">${b.tech}</p>
+      <div class="links">
+        API: <a href="${b.api}" target="_blank">${b.api}</a><br/>
         Docs: <a href="${b.docs}" target="_blank">${b.docs}</a>
-      </code>
+      </div>
+      <button class="btn-fetch" data-url="${b.api}"
+              data-idx="${i}">Listar Items</button>
+      <div class="result" id="result-${i}"></div>
     </div>
   `;
+}
+
+async function fetchItems(btn: HTMLButtonElement): Promise<void> {
+  const url = btn.dataset.url!;
+  const idx = btn.dataset.idx!;
+  const el = document.getElementById("result-" + idx)!;
+
+  el.textContent = "Conectando...";
+  el.className = "result";
+
+  try {
+    const res = await axios.get(url);
+    const items = res.data;
+    if (items.length === 0) {
+      el.textContent = "OK — lista vazia (0 items)";
+    } else {
+      el.innerHTML = items
+        .map((it: { id: number; name: string }) =>
+          "<span>#" + it.id + " " + it.name + "</span>"
+        )
+        .join(", ");
+    }
+    el.classList.add("ok");
+  } catch {
+    el.textContent = "Sem resposta — backend offline?";
+    el.classList.add("err");
+  }
 }
 
 render();
@@ -1138,7 +1161,7 @@ body {
   color: var(--navy-light);
 }
 
-.btn-test {
+.btn-fetch {
   display: inline-block;
   padding: 0.4rem 1rem;
   font-size: 0.8rem;
@@ -1150,19 +1173,19 @@ body {
   transition: background 0.15s;
 }
 
-.btn-test:hover {
+.btn-fetch:hover {
   background: var(--navy);
   color: var(--white);
 }
 
-.status {
+.result {
   margin-top: 0.5rem;
   font-size: 0.78rem;
   min-height: 1.2em;
 }
 
-.status.ok { color: var(--green); }
-.status.err { color: var(--red); }
+.result.ok  { color: var(--green); }
+.result.err { color: var(--red); }
 APPCSS
 
   cat > src/App.tsx << 'APPTSX'
@@ -1175,6 +1198,11 @@ interface Backend {
   tech: string;
   api: string;
   docs: string;
+}
+
+interface Item {
+  id: number;
+  name: string;
 }
 
 const backends: Backend[] = [
@@ -1199,21 +1227,25 @@ const backends: Backend[] = [
 ];
 
 function BackendCard({ b }: { b: Backend }) {
-  const [status, setStatus] = useState("");
+  const [result, setResult] = useState("");
   const [cls, setCls] = useState("");
 
-  async function testAPI() {
-    setStatus("Conectando...");
+  async function fetchItems() {
+    setResult("Conectando...");
     setCls("");
     try {
-      const res = await axios.get(b.api);
-      setStatus(
-        `OK (${res.status}) — ` +
-        `${Array.isArray(res.data) ? res.data.length : 0} itens`
-      );
+      const res = await axios.get<Item[]>(b.api);
+      const items = res.data;
+      if (items.length === 0) {
+        setResult("OK — lista vazia (0 items)");
+      } else {
+        setResult(
+          items.map((it) => `#${it.id} ${it.name}`).join(", ")
+        );
+      }
       setCls("ok");
     } catch {
-      setStatus("Sem resposta — backend offline?");
+      setResult("Sem resposta — backend offline?");
       setCls("err");
     }
   }
@@ -1233,10 +1265,10 @@ function BackendCard({ b }: { b: Backend }) {
           {b.docs}
         </a>
       </div>
-      <button className="btn-test" onClick={testAPI}>
-        Testar API
+      <button className="btn-fetch" onClick={fetchItems}>
+        Listar Items
       </button>
-      <p className={`status ${cls}`}>{status}</p>
+      <p className={`result ${cls}`}>{result}</p>
     </div>
   );
 }
