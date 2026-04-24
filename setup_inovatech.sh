@@ -1342,6 +1342,14 @@ header()  { echo -e "\n${BOLD}${CYAN}======================================${RES
             echo -e "${BOLD}${CYAN}  $*${RESET}"; \
             echo -e "${BOLD}${CYAN}======================================${RESET}\n"; }
 
+sha256() {
+  if command -v sha256sum &>/dev/null; then
+    sha256sum "$@"
+  else
+    shasum -a 256 "$@"
+  fi
+}
+
 # --dir: caminho explícito. Caso contrário, detecção em ~/inovatech/ (ver
 # comentário no cabeçalho deste script).
 ENTREGA_DIR=""
@@ -1450,20 +1458,16 @@ FILE_COUNT=0
 
 while IFS= read -r filepath; do
   rel="${filepath#${ENTREGA_DIR}/}"
-  file_hash=$(
-    sha256sum "${filepath}" | awk '{print $1}'
-  )
+  file_hash=$(sha256 "${filepath}" | awk '{print $1}')
   printf "%-64s  %s\n" \
     "${file_hash}" "${rel}" >> "${MANIFEST_FILE}"
-  echo "${file_hash}" >> "${HASH_LINES_FILE}"
+  printf '%s\n' "${file_hash}" >> "${HASH_LINES_FILE}"
   FILE_COUNT=$((FILE_COUNT + 1))
 done < <(list_files "${ENTREGA_DIR}")
 
-SORTED_HASHES=$(LC_ALL=C sort "${HASH_LINES_FILE}" \
-  | tr -d '\n')
 ENTREGA_HASH=$(
-  echo -n "${SORTED_HASHES}" \
-    | sha256sum | awk '{print $1}'
+  LC_ALL=C sort "${HASH_LINES_FILE}" \
+    | sha256 | awk '{print $1}'
 )
 
 {
@@ -1554,6 +1558,14 @@ error()   { echo -e "${RED}[ERRO]${RESET}  $*"; exit 1; }
 header()  { echo -e "\n${BOLD}${CYAN}======================================${RESET}"; \
             echo -e "${BOLD}${CYAN}  $*${RESET}"; \
             echo -e "${BOLD}${CYAN}======================================${RESET}\n"; }
+
+sha256() {
+  if command -v sha256sum &>/dev/null; then
+    sha256sum "$@"
+  else
+    shasum -a 256 "$@"
+  fi
+}
 
 BASE_DIR="$(pwd)"
 while [[ $# -gt 0 ]]; do
@@ -1646,23 +1658,22 @@ for proj in "${PROJECT_DIRS[@]}"; do
   file_count=0
   while IFS= read -r filepath; do
     rel="${filepath#${BASE_DIR}/}"
-    file_hash=$(
-      sha256sum "${filepath}" | awk '{print $1}'
-    )
+    file_hash=$(sha256 "${filepath}" | awk '{print $1}')
     printf "%-64s  %s\n" \
       "${file_hash}" "${rel}" >> "${MANIFEST_FILE}"
-    echo "${file_hash}" >> "${HASH_LINES_FILE}"
+    printf '%s\n' "${file_hash}" >> "${HASH_LINES_FILE}"
     file_count=$((file_count + 1))
   done < <(list_files "${dir}")
   echo "" >> "${MANIFEST_FILE}"
   success "  ${proj}/ → ${file_count} arquivos"
 done
 
-SORTED_HASHES=$(LC_ALL=C sort "${HASH_LINES_FILE}" \
-  | tr -d '\n')
+TOTAL=$(wc -l < "${HASH_LINES_FILE}" | tr -d ' ')
+info "Total de arquivos hasheados: ${TOTAL}"
+
 ROOT_HASH=$(
-  echo -n "${SORTED_HASHES}" \
-    | sha256sum | awk '{print $1}'
+  LC_ALL=C sort "${HASH_LINES_FILE}" \
+    | sha256 | awk '{print $1}'
 )
 
 {
@@ -1749,6 +1760,14 @@ success() { echo -e "${GREEN}[OK]${RESET}    $*"; }
 warn()    { echo -e "${YELLOW}[AVISO]${RESET} $*"; }
 error()   { echo -e "${RED}[ERRO]${RESET}  $*"; exit 1; }
 
+sha256() {
+  if command -v sha256sum &>/dev/null; then
+    sha256sum "$@"
+  else
+    shasum -a 256 "$@"
+  fi
+}
+
 BASE_DIR="$(pwd)"
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -1816,20 +1835,19 @@ for proj in "${PROJECT_DIRS[@]}"; do
   dir="${BASE_DIR}/${proj}"
   file_count=0
   while IFS= read -r filepath; do
-    file_hash=$(
-      sha256sum "${filepath}" | awk '{print $1}'
-    )
-    echo "${file_hash}" >> "${HASH_LINES_FILE}"
+    file_hash=$(sha256 "${filepath}" | awk '{print $1}')
+    printf '%s\n' "${file_hash}" >> "${HASH_LINES_FILE}"
     file_count=$((file_count + 1))
   done < <(list_files "${dir}")
   success "  ${proj}/ → ${file_count} arquivos"
 done
 
-SORTED_HASHES=$(LC_ALL=C sort "${HASH_LINES_FILE}" \
-  | tr -d '\n')
+TOTAL=$(wc -l < "${HASH_LINES_FILE}" | tr -d ' ')
+info "Total de arquivos hasheados: ${TOTAL}"
+
 ROOT_HASH=$(
-  echo -n "${SORTED_HASHES}" \
-    | sha256sum | awk '{print $1}'
+  LC_ALL=C sort "${HASH_LINES_FILE}" \
+    | sha256 | awk '{print $1}'
 )
 
 echo ""
