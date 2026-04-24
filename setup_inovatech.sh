@@ -175,6 +175,8 @@ TS_VERSION="5.8.3"
 # Setup ativo: corpo principal (invocado só ao final — seguro para curl|bash).
 # ===========================================================================
 
+GITHUB_RAW="https://raw.githubusercontent.com/RomuloBarrosPI/inovatech-lab-prep/main"
+
 run_inovatech_setup() {
 BASE_DIR="$(pwd)"
 
@@ -182,9 +184,66 @@ header "INOVATECH – Setup dos Projetos Base (versões fixas de ${SETUP_DATE})"
 info "Diretório raiz: ${BASE_DIR}"
 
 # ---------------------------------------------------------------------------
-# 1. Verificar dependências do sistema
+# 0. Baixar assets do repositório (logo)
+# ---------------------------------------------------------------------------
+if [ ! -f "${BASE_DIR}/logo-inovatech.png" ]; then
+  info "Baixando logo INOVATECH..."
+  if command -v curl &>/dev/null; then
+    curl -fsSL "${GITHUB_RAW}/logo-inovatech.png" \
+      -o "${BASE_DIR}/logo-inovatech.png"
+  elif command -v wget &>/dev/null; then
+    wget -q "${GITHUB_RAW}/logo-inovatech.png" \
+      -O "${BASE_DIR}/logo-inovatech.png"
+  else
+    warn "curl/wget indisponível; logo não baixado." \
+         "Frontends funcionarão sem favicon."
+  fi
+  [ -f "${BASE_DIR}/logo-inovatech.png" ] \
+    && success "Logo baixado." \
+    || warn "Falha ao baixar logo."
+else
+  info "Logo já presente em ${BASE_DIR}/logo-inovatech.png"
+fi
+
+# ---------------------------------------------------------------------------
+# 1. Verificar / instalar Python 3.12 e dependências do sistema
+#
+# No Ubuntu 22.04 o Python padrão é 3.10. O 3.12 vem do PPA deadsnakes e
+# precisa de pacotes extras (python3.12-venv, python3.12-dev) para que uv
+# consiga criar venvs sem "No module named 'distutils'" (PEP 632).
 # ---------------------------------------------------------------------------
 header "Verificando dependências do sistema"
+
+# ── 1a. Instalar python3.12 + pacotes de suporte se não existirem ────────
+if ! command -v "${PYTHON312_CMD}" &>/dev/null; then
+  info "${PYTHON312_CMD} não encontrado. Instalando via deadsnakes PPA..."
+  if [ "$(id -u)" -ne 0 ]; then
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq software-properties-common
+    sudo add-apt-repository -y ppa:deadsnakes/ppa
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq python3.12 python3.12-venv python3.12-dev
+  else
+    apt-get update -qq
+    apt-get install -y -qq software-properties-common
+    add-apt-repository -y ppa:deadsnakes/ppa
+    apt-get update -qq
+    apt-get install -y -qq python3.12 python3.12-venv python3.12-dev
+  fi
+  success "${PYTHON312_CMD} instalado via deadsnakes."
+else
+  # Garante que python3.12-venv está presente (evita "No module named
+  # 'distutils'" / "'_tkinter'" ao criar venvs com uv).
+  if ! "$PYTHON312_CMD" -c "import ensurepip" 2>/dev/null; then
+    info "Módulo ensurepip ausente; instalando python3.12-venv..."
+    if [ "$(id -u)" -ne 0 ]; then
+      sudo apt-get install -y -qq python3.12-venv
+    else
+      apt-get install -y -qq python3.12-venv
+    fi
+    success "python3.12-venv instalado."
+  fi
+fi
 
 check_cmd "${PYTHON312_CMD}"
 PYTHON312="$(command -v "${PYTHON312_CMD}")" \
@@ -235,6 +294,7 @@ success "uv: $(uv --version)"
 header "Garantindo Node.js 22 LTS via nvm"
 
 NODE_TARGET_MAJOR="22"
+NODE_TARGET_EXACT="22.22.2"   # versão exata para reprodutibilidade
 NVM_VERSION="0.40.3"          # versão do nvm a instalar se ausente
 NVM_DIR="${HOME}/.nvm"
 
@@ -263,28 +323,32 @@ export NVM_DIR="${NVM_DIR}"
 # shellcheck source=/dev/null
 \. "${NVM_DIR}/nvm.sh"
 
-# ── 3. Instalar e ativar Node 22 LTS ────────────────────────────────────────
-info "Instalando/ativando Node.js ${NODE_TARGET_MAJOR} LTS..."
-nvm install "${NODE_TARGET_MAJOR}" --lts --no-progress 2>&1 | grep -v "^$" || true
-nvm use "${NODE_TARGET_MAJOR}" > /dev/null
-nvm alias default "${NODE_TARGET_MAJOR}" > /dev/null   # padrão para novas sessões
+# ── 3. Instalar e ativar Node 22 LTS (versão exata) ─────────────────────────
+# Versão exata garante mesma versão de npm → mesmos lock files
+info "Instalando/ativando Node.js ${NODE_TARGET_EXACT} LTS..."
+nvm install "${NODE_TARGET_EXACT}" --no-progress 2>&1 | grep -v "^$" || true
+nvm use "${NODE_TARGET_EXACT}" > /dev/null
+nvm alias default "${NODE_TARGET_EXACT}" > /dev/null
 
 NODE_VERSION=$(node --version | tr -d 'v')
 NPM_VERSION=$(npm --version)
-NODE_MAJOR=$(echo "${NODE_VERSION}" | cut -d. -f1)
 
-if [ "${NODE_MAJOR}" != "${NODE_TARGET_MAJOR}" ]; then
-  error "Esperado Node.js ${NODE_TARGET_MAJOR}.x, mas ativo é ${NODE_VERSION}."
+if [ "${NODE_VERSION}" != "${NODE_TARGET_EXACT}" ]; then
+  warn "Esperado Node.js ${NODE_TARGET_EXACT}, ativo é ${NODE_VERSION}."
+  NODE_MAJOR=$(echo "${NODE_VERSION}" | cut -d. -f1)
+  if [ "${NODE_MAJOR}" != "${NODE_TARGET_MAJOR}" ]; then
+    error "Major ${NODE_MAJOR} difere do esperado ${NODE_TARGET_MAJOR}."
+  fi
 fi
 
-success "Node.js : ${NODE_VERSION} (via nvm, major ${NODE_TARGET_MAJOR} conforme NT 03/2026)"
+success "Node.js : ${NODE_VERSION} (via nvm, exato ${NODE_TARGET_EXACT})"
 success "npm     : ${NPM_VERSION}"
 
 # ── 4. Criar .nvmrc no diretório do projeto ──────────────────────────────────
 # Qualquer `nvm use` ou editor com suporte a nvm lerá este arquivo e
 # ativará automaticamente a versão correta ao entrar na pasta do projeto.
-echo "${NODE_TARGET_MAJOR}" > "${BASE_DIR}/.nvmrc"
-success ".nvmrc criado em ${BASE_DIR}/.nvmrc → versão ${NODE_TARGET_MAJOR}"
+echo "${NODE_TARGET_EXACT}" > "${BASE_DIR}/.nvmrc"
+success ".nvmrc criado em ${BASE_DIR}/.nvmrc → versão ${NODE_TARGET_EXACT}"
 
 # ---------------------------------------------------------------------------
 # 4. Backend 1 – Django + DRF
@@ -304,6 +368,23 @@ if [ ! -f "${DJANGO_DIR}/manage.py" ]; then
   cd "${DJANGO_DIR}"
   .venv/bin/python manage.py startapp core
   cd "${BASE_DIR}"
+
+  # SECRET_KEY fixa: django-admin startproject gera uma chave
+  # aleatória a cada execução, o que impede reprodutibilidade
+  # do hash de selagem. Valor fixo, seguro para ambiente de
+  # prova (não é produção).
+  FIXED_SECRET='django-insecure-inovatech-edital30-2026-chave-fixa-prova'
+  python3 -c "
+import pathlib, re, sys
+p = pathlib.Path(sys.argv[1]) / 'config' / 'settings.py'
+t = p.read_text()
+t = re.sub(
+    r\"SECRET_KEY\s*=\s*['\\\"].*?['\\\"]\",
+    \"SECRET_KEY = '\" + sys.argv[2] + \"'\",
+    t,
+)
+p.write_text(t)
+" "${DJANGO_DIR}" "${FIXED_SECRET}"
 
   cat >> "${DJANGO_DIR}/config/settings.py" << 'SETTINGS'
 
@@ -338,6 +419,91 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {'TITLE': 'INOVATECH API', 'VERSION': '1.0.0'}
 SETTINGS
 
+  # ── Hello-world: Model Item ───────────────────────────────────────────────
+  cat > "${DJANGO_DIR}/core/models.py" << 'MODELS'
+from django.db import models
+
+
+class Item(models.Model):
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.name
+MODELS
+
+  cat > "${DJANGO_DIR}/core/serializers.py" << 'SERIALIZERS'
+from rest_framework import serializers
+from .models import Item
+
+
+class ItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Item
+        fields = "__all__"
+        read_only_fields = ("id", "created_at")
+SERIALIZERS
+
+  cat > "${DJANGO_DIR}/core/views.py" << 'VIEWS'
+from rest_framework import viewsets
+from rest_framework.permissions import AllowAny
+from .models import Item
+from .serializers import ItemSerializer
+
+
+class ItemViewSet(viewsets.ModelViewSet):
+    queryset = Item.objects.all()
+    serializer_class = ItemSerializer
+    permission_classes = [AllowAny]
+VIEWS
+
+  cat > "${DJANGO_DIR}/core/urls.py" << 'CORE_URLS'
+from rest_framework.routers import DefaultRouter
+from .views import ItemViewSet
+
+router = DefaultRouter()
+router.register("items", ItemViewSet)
+
+urlpatterns = router.urls
+CORE_URLS
+
+  cat > "${DJANGO_DIR}/config/urls.py" << 'CONFIG_URLS'
+from django.contrib import admin
+from django.urls import path, include
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularSwaggerView,
+)
+
+urlpatterns = [
+    path("admin/", admin.site.urls),
+    path(
+        "api/",
+        include("core.urls"),
+    ),
+    path(
+        "api/schema/",
+        SpectacularAPIView.as_view(),
+        name="schema",
+    ),
+    path(
+        "api/docs/",
+        SpectacularSwaggerView.as_view(url_name="schema"),
+        name="swagger-ui",
+    ),
+]
+CONFIG_URLS
+
+  info "Aplicando migrations do hello-world..."
+  cd "${DJANGO_DIR}"
+  .venv/bin/python manage.py makemigrations core --verbosity 0
+  .venv/bin/python manage.py migrate --verbosity 0
+  cd "${BASE_DIR}"
+
   success "Projeto Django criado em ${DJANGO_DIR}"
 else
   warn "Django já existe, pulando inicialização."
@@ -360,11 +526,103 @@ if [ ! -f "${FASTAPI_DIR}/main.py" ]; then
   : > "${FASTAPI_DIR}/api/__init__.py"
   : > "${FASTAPI_DIR}/api/core/__init__.py"
 
+  cat > "${FASTAPI_DIR}/api/core/database.py" << 'DB'
+from sqlmodel import create_engine, Session, SQLModel
+
+DATABASE_URL = "sqlite:///./database.db"
+engine = create_engine(DATABASE_URL)
+
+
+def create_db_and_tables():
+    SQLModel.metadata.create_all(engine)
+
+
+def get_session():
+    with Session(engine) as session:
+        yield session
+DB
+
+  # ── Hello-world: Model Item ───────────────────────────────────────────────
+  cat > "${FASTAPI_DIR}/api/models/item.py" << 'ITEM_MODEL'
+from sqlmodel import SQLModel, Field
+
+
+class ItemBase(SQLModel):
+    name: str
+    description: str = ""
+
+
+class Item(ItemBase, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+
+
+class ItemRead(ItemBase):
+    id: int
+
+
+class ItemCreate(ItemBase):
+    pass
+ITEM_MODEL
+
+  : > "${FASTAPI_DIR}/api/models/__init__.py"
+  : > "${FASTAPI_DIR}/api/routers/__init__.py"
+
+  cat > "${FASTAPI_DIR}/api/routers/items.py" << 'ITEMS_ROUTER'
+from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel import Session, select
+from api.core.database import get_session
+from api.models.item import Item, ItemCreate, ItemRead
+
+router = APIRouter(prefix="/items", tags=["items"])
+
+
+@router.get("/", response_model=list[ItemRead])
+def list_items(session: Session = Depends(get_session)):
+    return session.exec(select(Item)).all()
+
+
+@router.post("/", response_model=ItemRead, status_code=201)
+def create_item(
+    payload: ItemCreate,
+    session: Session = Depends(get_session),
+):
+    item = Item.model_validate(payload)
+    session.add(item)
+    session.commit()
+    session.refresh(item)
+    return item
+
+
+@router.get("/{item_id}", response_model=ItemRead)
+def get_item(
+    item_id: int,
+    session: Session = Depends(get_session),
+):
+    item = session.get(Item, item_id)
+    if not item:
+        raise HTTPException(404, "Item not found")
+    return item
+ITEMS_ROUTER
+
   cat > "${FASTAPI_DIR}/main.py" << 'MAIN'
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from api.core.database import create_db_and_tables
+from api.routers.items import router as items_router
 
-app = FastAPI(title="INOVATECH API", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    create_db_and_tables()
+    yield
+
+
+app = FastAPI(
+    title="INOVATECH API",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -373,24 +631,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(items_router)
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
 MAIN
-
-  cat > "${FASTAPI_DIR}/api/core/database.py" << 'DB'
-from sqlmodel import create_engine, Session, SQLModel
-
-DATABASE_URL = "sqlite:///./database.db"
-engine = create_engine(DATABASE_URL, echo=True)
-
-def create_db_and_tables():
-    SQLModel.metadata.create_all(engine)
-
-def get_session():
-    with Session(engine) as session:
-        yield session
-DB
 
   cat > "${FASTAPI_DIR}/alembic.ini" << 'INI'
 [alembic]
@@ -469,19 +716,84 @@ TSCONFIG
 
   mkdir -p src/{routes,entities,middlewares,controllers}
 
+  # ── Hello-world: Entity Item ──────────────────────────────────────────────
+  cat > src/entities/Item.ts << 'ENTITY'
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+} from "typeorm";
+
+@Entity()
+export class Item {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  name: string;
+
+  @Column({ default: "" })
+  description: string;
+}
+ENTITY
+
+  cat > src/routes/items.ts << 'ROUTES'
+import { Router, Request, Response } from "express";
+import { AppDataSource } from "../data-source";
+import { Item } from "../entities/Item";
+
+const router = Router();
+const repo = () => AppDataSource.getRepository(Item);
+
+router.get("/", async (_req: Request, res: Response) => {
+  const items = await repo().find();
+  res.json(items);
+});
+
+router.post("/", async (req: Request, res: Response) => {
+  const item = repo().create(req.body);
+  const saved = await repo().save(item);
+  res.status(201).json(saved);
+});
+
+export default router;
+ROUTES
+
+  cat > src/data-source.ts << 'DATASOURCE'
+import { DataSource } from "typeorm";
+import { Item } from "./entities/Item";
+
+export const AppDataSource = new DataSource({
+  type: "better-sqlite3",
+  database: "database.db",
+  synchronize: true,
+  entities: [Item],
+});
+DATASOURCE
+
   cat > src/index.ts << 'INDEX'
-import 'reflect-metadata';
-import express from 'express';
-import cors from 'cors';
+import "reflect-metadata";
+import express from "express";
+import cors from "cors";
+import { AppDataSource } from "./data-source";
+import itemsRouter from "./routes/items";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+app.get("/health", (_req, res) =>
+  res.json({ status: "ok" })
+);
+app.use("/items", itemsRouter);
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+AppDataSource.initialize().then(() => {
+  app.listen(PORT, () =>
+    console.log(`Server running on port ${PORT}`)
+  );
+});
 INDEX
 
   node -e "
@@ -520,6 +832,179 @@ if [ ! -d "${VANILLA_DIR}" ]; then
   npm install --quiet
   npm install --save-dev --save-exact "vite@${VITE_VERSION}" --quiet
   npm install --save --save-exact "axios@${AXIOS_VERSION}" --quiet
+
+  # ── Branding INOVATECH ──────────────────────────────────────────────────
+  cp "${BASE_DIR}/logo-inovatech.png" public/logo-inovatech.png
+
+  cat > index.html << 'HTML'
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/logo-inovatech.png" />
+    <title>INOVATECH</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
+HTML
+
+  cat > src/style.css << 'CSS'
+:root {
+  --navy: #1b2a4a;
+  --navy-light: #2d4373;
+  --gray-bg: #f4f6f9;
+  --white: #ffffff;
+  --text: #333333;
+  --text-muted: #6b7280;
+  --radius: 12px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--gray-bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 2rem 1rem;
+}
+
+#app {
+  max-width: 820px;
+  width: 100%;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.header img {
+  height: 80px;
+  margin-bottom: 1rem;
+}
+
+.header h1 {
+  font-size: 1.1rem;
+  color: var(--navy);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1.25rem;
+}
+
+.card {
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+.card h2 {
+  font-size: 1rem;
+  color: var(--navy);
+  margin-bottom: 0.5rem;
+}
+
+.card p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.card code {
+  display: block;
+  font-size: 0.78rem;
+  background: var(--gray-bg);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  color: var(--navy-light);
+  word-break: break-all;
+}
+CSS
+
+  cat > src/main.ts << 'MAIN_TS'
+import "./style.css";
+
+interface BackendCard {
+  title: string;
+  description: string;
+  url: string;
+  docs: string;
+}
+
+const backends: BackendCard[] = [
+  {
+    title: "Django + DRF",
+    description: "Python 3.12 · Django 5.2 · REST Framework",
+    url: "http://localhost:8000/api/items/",
+    docs: "http://localhost:8000/api/docs/",
+  },
+  {
+    title: "FastAPI + SQLModel",
+    description: "Python 3.12 · FastAPI · Pydantic v2",
+    url: "http://localhost:8000/items/",
+    docs: "http://localhost:8000/docs",
+  },
+  {
+    title: "Express + TypeORM",
+    description: "Node.js 22 · TypeScript · SQLite",
+    url: "http://localhost:3000/items",
+    docs: "http://localhost:3000/health",
+  },
+];
+
+function render(): void {
+  const app = document.getElementById("app")!;
+  app.innerHTML = `
+    <div class="header">
+      <img src="/logo-inovatech.png"
+           alt="INOVATECH" />
+      <h1>Residência em Inovação Tecnológica</h1>
+    </div>
+    <div class="cards">
+      ${backends.map(cardHTML).join("")}
+    </div>
+  `;
+}
+
+function cardHTML(b: BackendCard): string {
+  return `
+    <div class="card">
+      <h2>${b.title}</h2>
+      <p>${b.description}</p>
+      <code>
+        API: <a href="${b.url}" target="_blank">${b.url}</a><br/>
+        Docs: <a href="${b.docs}" target="_blank">${b.docs}</a>
+      </code>
+    </div>
+  `;
+}
+
+render();
+MAIN_TS
+
+  # Remove artefatos do template padrão do Vite
+  rm -f src/counter.ts src/typescript.svg public/vite.svg 2>/dev/null || true
+
   success "Frontend Vanilla criado em ${VANILLA_DIR}"
   cd "${BASE_DIR}"
 else
@@ -544,6 +1029,238 @@ if [ ! -d "${REACT_DIR}" ]; then
     "axios@${AXIOS_VERSION}" \
     "react-router-dom@${REACT_ROUTER_VERSION}" \
     --quiet
+
+  # ── Branding INOVATECH ──────────────────────────────────────────────────
+  cp "${BASE_DIR}/logo-inovatech.png" public/logo-inovatech.png
+
+  cat > index.html << 'HTML'
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/logo-inovatech.png" />
+    <title>INOVATECH</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+HTML
+
+  cat > src/App.css << 'APPCSS'
+:root {
+  --navy: #1b2a4a;
+  --navy-light: #2d4373;
+  --gray-bg: #f4f6f9;
+  --white: #ffffff;
+  --text: #333333;
+  --text-muted: #6b7280;
+  --green: #16a34a;
+  --red: #dc2626;
+  --radius: 12px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--gray-bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.header img {
+  height: 80px;
+  margin-bottom: 1rem;
+}
+
+.header h1 {
+  font-size: 1.1rem;
+  color: var(--navy);
+  font-weight: 600;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
+}
+
+.card {
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+.card h2 {
+  font-size: 1rem;
+  color: var(--navy);
+  margin-bottom: 0.25rem;
+}
+
+.card .tech {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.card .links {
+  font-size: 0.78rem;
+  background: var(--gray-bg);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  color: var(--navy-light);
+  margin-bottom: 0.75rem;
+  word-break: break-all;
+}
+
+.card .links a {
+  color: var(--navy-light);
+}
+
+.btn-test {
+  display: inline-block;
+  padding: 0.4rem 1rem;
+  font-size: 0.8rem;
+  border: 1px solid var(--navy);
+  border-radius: 6px;
+  background: var(--white);
+  color: var(--navy);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-test:hover {
+  background: var(--navy);
+  color: var(--white);
+}
+
+.status {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  min-height: 1.2em;
+}
+
+.status.ok { color: var(--green); }
+.status.err { color: var(--red); }
+APPCSS
+
+  cat > src/App.tsx << 'APPTSX'
+import { useState } from "react";
+import axios from "axios";
+import "./App.css";
+
+interface Backend {
+  title: string;
+  tech: string;
+  api: string;
+  docs: string;
+}
+
+const backends: Backend[] = [
+  {
+    title: "Django + DRF",
+    tech: "Python 3.12 · Django 5.2 · REST Framework",
+    api: "http://localhost:8000/api/items/",
+    docs: "http://localhost:8000/api/docs/",
+  },
+  {
+    title: "FastAPI + SQLModel",
+    tech: "Python 3.12 · FastAPI · Pydantic v2",
+    api: "http://localhost:8000/items/",
+    docs: "http://localhost:8000/docs",
+  },
+  {
+    title: "Express + TypeORM",
+    tech: "Node.js 22 · TypeScript · SQLite",
+    api: "http://localhost:3000/items",
+    docs: "http://localhost:3000/health",
+  },
+];
+
+function BackendCard({ b }: { b: Backend }) {
+  const [status, setStatus] = useState("");
+  const [cls, setCls] = useState("");
+
+  async function testAPI() {
+    setStatus("Conectando...");
+    setCls("");
+    try {
+      const res = await axios.get(b.api);
+      setStatus(
+        `OK (${res.status}) — ` +
+        `${Array.isArray(res.data) ? res.data.length : 0} itens`
+      );
+      setCls("ok");
+    } catch {
+      setStatus("Sem resposta — backend offline?");
+      setCls("err");
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2>{b.title}</h2>
+      <p className="tech">{b.tech}</p>
+      <div className="links">
+        API:{" "}
+        <a href={b.api} target="_blank">
+          {b.api}
+        </a>
+        <br />
+        Docs:{" "}
+        <a href={b.docs} target="_blank">
+          {b.docs}
+        </a>
+      </div>
+      <button className="btn-test" onClick={testAPI}>
+        Testar API
+      </button>
+      <p className={`status ${cls}`}>{status}</p>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <div className="container">
+      <div className="header">
+        <img src="/logo-inovatech.png" alt="INOVATECH" />
+        <h1>Residência em Inovação Tecnológica</h1>
+      </div>
+      <div className="cards">
+        {backends.map((b) => (
+          <BackendCard key={b.title} b={b} />
+        ))}
+      </div>
+    </div>
+  );
+}
+APPTSX
+
+  # Remove artefatos do template padrão do Vite
+  rm -f src/assets/react.svg public/vite.svg 2>/dev/null || true
+
   success "Frontend React criado em ${REACT_DIR}"
   cd "${BASE_DIR}"
 else
@@ -670,6 +1387,9 @@ list_files() {
     ! -path "*/.comprovante/*" \
     ! -name "*.log" \
     ! -name ".DS_Store" \
+    ! -name "*.sqlite3" \
+    ! -name "*.db" \
+    ! -name "package-lock.json" \
     | sort
 }
 
@@ -853,6 +1573,9 @@ list_files() {
     ! -path "*/.seal/*" \
     ! -name "*.log" \
     ! -name ".DS_Store" \
+    ! -name "*.sqlite3" \
+    ! -name "*.db" \
+    ! -name "package-lock.json" \
     | sort
 }
 
@@ -946,7 +1669,143 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 12. inovatech-versions — listar versões (candidato verifica o ambiente)
+# 12. inovatech-verify — candidato confere integridade do ambiente
+#     Somente leitura: recalcula o hash raiz e exibe para comparação
+#     com o hash público divulgado pela coordenação.
+# ---------------------------------------------------------------------------
+header "Instalando comando inovatech-verify"
+
+VERIFY_BIN="/usr/local/bin/inovatech-verify"
+
+cat > /tmp/inovatech-verify << 'VERIFY_SCRIPT'
+#!/usr/bin/env bash
+# =============================================================================
+# INOVATECH – Verificação de Integridade (somente leitura)
+# Uso pelo CANDIDATO ao chegar no computador, antes de iniciar a prova.
+# Recalcula o hash raiz dos projetos base e exibe para comparação
+# com o hash público divulgado pela coordenação.
+# =============================================================================
+
+set -euo pipefail
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
+info()    { echo -e "${CYAN}[INFO]${RESET}  $*"; }
+success() { echo -e "${GREEN}[OK]${RESET}    $*"; }
+warn()    { echo -e "${YELLOW}[AVISO]${RESET} $*"; }
+error()   { echo -e "${RED}[ERRO]${RESET}  $*"; exit 1; }
+
+BASE_DIR="$(pwd)"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dir) BASE_DIR="$2"; shift 2 ;;
+    *) error "Argumento desconhecido: $1" ;;
+  esac
+done
+
+[ -d "${BASE_DIR}" ] || error "Diretório não encontrado: ${BASE_DIR}"
+
+PROJECT_DIRS=(
+  "backend-django"
+  "backend-fastapi"
+  "backend-express"
+  "frontend-vanilla"
+  "frontend-react"
+)
+
+echo ""
+echo -e "${BOLD}${CYAN}======================================${RESET}"
+echo -e "${BOLD}${CYAN}  INOVATECH – Verificação de Integridade${RESET}"
+echo -e "${BOLD}${CYAN}======================================${RESET}"
+echo ""
+info "Diretório base : ${BASE_DIR}"
+info "Data/Hora      : $(date '+%Y-%m-%dT%H:%M:%S')"
+echo ""
+
+info "Verificando projetos base..."
+for proj in "${PROJECT_DIRS[@]}"; do
+  dir="${BASE_DIR}/${proj}"
+  if [ -d "${dir}" ]; then
+    success "  ${proj}/"
+  else
+    error "Projeto não encontrado: ${dir}"
+  fi
+done
+echo ""
+
+list_files() {
+  local dir="$1"
+  find "${dir}" -type f \
+    ! -path "*/.venv/*" \
+    ! -path "*/node_modules/*" \
+    ! -path "*/__pycache__/*" \
+    ! -path "*/.git/*" \
+    ! -path "*/*.pyc" \
+    ! -path "*/*.pyo" \
+    ! -path "*/dist/*" \
+    ! -path "*/.seal/*" \
+    ! -name "*.log" \
+    ! -name ".DS_Store" \
+    ! -name "*.sqlite3" \
+    ! -name "*.db" \
+    ! -name "package-lock.json" \
+    | sort
+}
+
+info "Calculando hashes (pode levar alguns segundos)..."
+echo ""
+
+ALL_HASHES=""
+
+for proj in "${PROJECT_DIRS[@]}"; do
+  dir="${BASE_DIR}/${proj}"
+  file_count=0
+  while IFS= read -r filepath; do
+    file_hash=$(sha256sum "${filepath}" | awk '{print $1}')
+    ALL_HASHES="${ALL_HASHES}${file_hash}"
+    file_count=$((file_count + 1))
+  done < <(list_files "${dir}")
+  success "  ${proj}/ → ${file_count} arquivos"
+done
+
+ROOT_HASH=$(echo -n "${ALL_HASHES}" | sha256sum | awk '{print $1}')
+
+echo ""
+echo "=============================================================="
+echo "  INOVATECH – Resultado da Verificação"
+echo "  Edital 30/2026 – GAB/REI/IFPI"
+echo "=============================================================="
+echo ""
+echo "  Algoritmo : SHA-256 (hash raiz)"
+echo ""
+echo "  HASH CALCULADO NESTE COMPUTADOR"
+echo "  ────────────────────────────────────────────────────────────"
+echo "  ${ROOT_HASH}"
+echo "  ────────────────────────────────────────────────────────────"
+echo ""
+echo -e "  ${BOLD}Compare o hash acima com o HASH PÚBLICO OFICIAL${RESET}"
+echo "  divulgado pela coordenação."
+echo ""
+echo -e "  Se forem ${GREEN}${BOLD}iguais${RESET}: ambiente íntegro, pode iniciar a prova."
+echo -e "  Se forem ${RED}${BOLD}diferentes${RESET}: comunique a coordenação imediatamente."
+echo "=============================================================="
+echo ""
+VERIFY_SCRIPT
+
+if [ "$(id -u)" -eq 0 ]; then
+  cp /tmp/inovatech-verify "${VERIFY_BIN}"
+  chmod +x "${VERIFY_BIN}"
+  success "Comando instalado: ${VERIFY_BIN}"
+else
+  sudo cp /tmp/inovatech-verify "${VERIFY_BIN}" \
+    && sudo chmod +x "${VERIFY_BIN}" \
+    && success "Comando instalado: ${VERIFY_BIN}" \
+    || warn "Não foi possível instalar inovatech-verify em /usr/local/bin."
+fi
+rm -f /tmp/inovatech-verify 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+# 13. inovatech-versions — listar versões (candidato verifica o ambiente)
 # ---------------------------------------------------------------------------
 header "Instalando comando inovatech-versions"
 
@@ -1166,10 +2025,11 @@ warn "Django fixado em 5.2.13 LTS (não 6.x) — série LTS mais estável."
 echo ""
 echo -e "${BOLD}Comandos (execute no terminal, em ${BASE_DIR}):${RESET}"
 echo ""
+echo -e "  ${GREEN}✔${RESET}  ${BOLD}inovatech-verify${RESET}    → candidato confere hash de integridade"
 echo -e "  ${GREEN}✔${RESET}  ${BOLD}inovatech-versions${RESET}  → confere versões do ambiente (candidato)"
-echo -e "  ${GREEN}✔${RESET}  ${BOLD}inovatech-submit${RESET}  → gera comprovante (candidato)"
-echo -e "  ${GREEN}✔${RESET}  ${BOLD}inovatech-seal${RESET}    → selagem única; após o sucesso o binário" \
-" é removido (evita nova selagem acidental; reinstale o setup p/ outro lab)"
+echo -e "  ${GREEN}✔${RESET}  ${BOLD}inovatech-submit${RESET}    → gera comprovante (candidato)"
+echo -e "  ${GREEN}✔${RESET}  ${BOLD}inovatech-seal${RESET}      → selagem única (coordenação); binário" \
+" é removido após uso"
 echo ""
 echo -e "${BOLD}Como iniciar cada projeto:${RESET}"
 echo ""
@@ -1187,18 +2047,21 @@ echo -e "  ${CYAN}React  :${RESET}  cd frontend-react && npm run dev"
 echo ""
 echo -e "${BOLD}Ordem de uso (terminal, a partir de ${BASE_DIR}):${RESET}"
 echo ""
-echo -e "  ${CYAN}0.${RESET} Candidato pode rodar: ${BOLD}inovatech-versions${RESET} p/ checar" \
-" dependências (opcional, antes ou durante a prova)."
-echo ""
-echo -e "  ${CYAN}1. Coordenação${RESET} roda ${BOLD}inovatech-seal${RESET} (padrão"
+echo -e "  ${CYAN}0. Coordenação${RESET} roda ${BOLD}inovatech-seal${RESET} (padrão"
 echo "     em ~/inovatech; use --dir /caminho se necessário), divulga o hash"
 echo "     público; em seguida o binário é removido (uma selagem por ambiente)."
 echo ""
-echo -e "  ${CYAN}2. Candidatos${RESET} desenvolvem em entrega (renomeada na prova"
+echo -e "  ${CYAN}1. Candidato${RESET} ao chegar: ${BOLD}inovatech-verify${RESET} — compara o hash"
+echo "     calculado com o hash público divulgado. Se diferir, avisa a coordenação."
+echo ""
+echo -e "  ${CYAN}2. Candidato${RESET} pode rodar: ${BOLD}inovatech-versions${RESET} p/ checar" \
+" dependências (opcional, antes ou durante a prova)."
+echo ""
+echo -e "  ${CYAN}3. Candidatos${RESET} desenvolvem em entrega (renomeada na prova"
 echo "     para entrega_##, 01 a 40, nota técnica). inovatech-submit ajusta a"
 echo "     pasta sozinho se houver uma só; senão, inovatech-submit --dir …/entrega_##"
 echo ""
-echo -e "  ${CYAN}3. Ao encerrar${RESET}, cada candidato: ${BOLD}inovatech-submit${RESET}, informa" \
+echo -e "  ${CYAN}4. Ao encerrar${RESET}, cada candidato: ${BOLD}inovatech-submit${RESET}, informa" \
 " nome e código PP, e anota o hash."
 echo ""
 success "Setup INOVATECH finalizado — ${SETUP_DATE}"
