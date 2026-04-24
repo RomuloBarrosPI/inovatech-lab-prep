@@ -1652,18 +1652,16 @@ HASH_ENTRIES_FILE=$(mktemp)
 trap 'rm -f "${HASH_ENTRIES_FILE}"' EXIT
 
 for proj in "${PROJECT_DIRS[@]}"; do
-  dir="${BASE_DIR}/${proj}"
   echo "## Projeto: ${proj}" >> "${MANIFEST_FILE}"
   echo "" >> "${MANIFEST_FILE}"
   file_count=0
-  while IFS= read -r filepath; do
-    rel="${filepath#${BASE_DIR}/}"
-    file_hash=$(sha256 "${filepath}" | awk '{print $1}')
+  while IFS= read -r relpath; do
+    file_hash=$(sha256 "${BASE_DIR}/${relpath}" | awk '{print $1}')
     printf "%-64s  %s\n" \
-      "${file_hash}" "${rel}" >> "${MANIFEST_FILE}"
-    printf '%s\t%s\n' "${rel}" "${file_hash}" >> "${HASH_ENTRIES_FILE}"
+      "${file_hash}" "${relpath}" >> "${MANIFEST_FILE}"
+    printf '%s\t%s\n' "${relpath}" "${file_hash}" >> "${HASH_ENTRIES_FILE}"
     file_count=$((file_count + 1))
-  done < <(list_files "${dir}")
+  done < <( cd "${BASE_DIR}" && list_files "${proj}" )
   echo "" >> "${MANIFEST_FILE}"
   success "  ${proj}/ → ${file_count} arquivos"
 done
@@ -1832,14 +1830,12 @@ HASH_ENTRIES_FILE=$(mktemp)
 trap 'rm -f "${HASH_ENTRIES_FILE}"' EXIT
 
 for proj in "${PROJECT_DIRS[@]}"; do
-  dir="${BASE_DIR}/${proj}"
   file_count=0
-  while IFS= read -r filepath; do
-    rel="${filepath#${BASE_DIR}/}"
-    file_hash=$(sha256 "${filepath}" | awk '{print $1}')
-    printf '%s\t%s\n' "${rel}" "${file_hash}" >> "${HASH_ENTRIES_FILE}"
+  while IFS= read -r relpath; do
+    file_hash=$(sha256 "${BASE_DIR}/${relpath}" | awk '{print $1}')
+    printf '%s\t%s\n' "${relpath}" "${file_hash}" >> "${HASH_ENTRIES_FILE}"
     file_count=$((file_count + 1))
-  done < <(list_files "${dir}")
+  done < <( cd "${BASE_DIR}" && list_files "${proj}" )
   success "  ${proj}/ → ${file_count} arquivos"
 done
 
