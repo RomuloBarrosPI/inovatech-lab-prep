@@ -1452,8 +1452,8 @@ echo ""
   echo ""
 } > "${MANIFEST_FILE}"
 
-HASH_LINES_FILE=$(mktemp)
-trap 'rm -f "${HASH_LINES_FILE}"' EXIT
+HASH_ENTRIES_FILE=$(mktemp)
+trap 'rm -f "${HASH_ENTRIES_FILE}"' EXIT
 FILE_COUNT=0
 
 while IFS= read -r filepath; do
@@ -1461,12 +1461,12 @@ while IFS= read -r filepath; do
   file_hash=$(sha256 "${filepath}" | awk '{print $1}')
   printf "%-64s  %s\n" \
     "${file_hash}" "${rel}" >> "${MANIFEST_FILE}"
-  printf '%s\n' "${file_hash}" >> "${HASH_LINES_FILE}"
+  printf '%s\n' "${file_hash}" >> "${HASH_ENTRIES_FILE}"
   FILE_COUNT=$((FILE_COUNT + 1))
 done < <(list_files "${ENTREGA_DIR}")
 
 ENTREGA_HASH=$(
-  LC_ALL=C sort "${HASH_LINES_FILE}" \
+  LC_ALL=C sort "${HASH_ENTRIES_FILE}" \
     | sha256 | awk '{print $1}'
 )
 
@@ -1642,14 +1642,14 @@ echo ""
   echo "# INOVATECH – Manifesto de Integridade"
   echo "# Gerado em  : ${TIMESTAMP}"
   echo "# Algoritmo  : SHA-256"
-  echo "# Hash raiz  : SHA-256 da concatenação dos"
-  echo "#   hashes individuais em ordem lexicográfica"
+  echo "# Hash raiz  : SHA-256 da concatenação ordenada de"
+  echo "#   caminho_relativo<TAB>hash_arquivo (LC_ALL=C)"
   echo "# ============================================="
   echo ""
 } > "${MANIFEST_FILE}"
 
-HASH_LINES_FILE=$(mktemp)
-trap 'rm -f "${HASH_LINES_FILE}"' EXIT
+HASH_ENTRIES_FILE=$(mktemp)
+trap 'rm -f "${HASH_ENTRIES_FILE}"' EXIT
 
 for proj in "${PROJECT_DIRS[@]}"; do
   dir="${BASE_DIR}/${proj}"
@@ -1661,18 +1661,18 @@ for proj in "${PROJECT_DIRS[@]}"; do
     file_hash=$(sha256 "${filepath}" | awk '{print $1}')
     printf "%-64s  %s\n" \
       "${file_hash}" "${rel}" >> "${MANIFEST_FILE}"
-    printf '%s\n' "${file_hash}" >> "${HASH_LINES_FILE}"
+    printf '%s\t%s\n' "${rel}" "${file_hash}" >> "${HASH_ENTRIES_FILE}"
     file_count=$((file_count + 1))
   done < <(list_files "${dir}")
   echo "" >> "${MANIFEST_FILE}"
   success "  ${proj}/ → ${file_count} arquivos"
 done
 
-TOTAL=$(wc -l < "${HASH_LINES_FILE}" | tr -d ' ')
+TOTAL=$(wc -l < "${HASH_ENTRIES_FILE}" | tr -d ' ')
 info "Total de arquivos hasheados: ${TOTAL}"
 
 ROOT_HASH=$(
-  LC_ALL=C sort "${HASH_LINES_FILE}" \
+  LC_ALL=C sort "${HASH_ENTRIES_FILE}" \
     | sha256 | awk '{print $1}'
 )
 
@@ -1828,25 +1828,26 @@ list_files() {
 info "Calculando hashes (pode levar alguns segundos)..."
 echo ""
 
-HASH_LINES_FILE=$(mktemp)
-trap 'rm -f "${HASH_LINES_FILE}"' EXIT
+HASH_ENTRIES_FILE=$(mktemp)
+trap 'rm -f "${HASH_ENTRIES_FILE}"' EXIT
 
 for proj in "${PROJECT_DIRS[@]}"; do
   dir="${BASE_DIR}/${proj}"
   file_count=0
   while IFS= read -r filepath; do
+    rel="${filepath#${BASE_DIR}/}"
     file_hash=$(sha256 "${filepath}" | awk '{print $1}')
-    printf '%s\n' "${file_hash}" >> "${HASH_LINES_FILE}"
+    printf '%s\t%s\n' "${rel}" "${file_hash}" >> "${HASH_ENTRIES_FILE}"
     file_count=$((file_count + 1))
   done < <(list_files "${dir}")
   success "  ${proj}/ → ${file_count} arquivos"
 done
 
-TOTAL=$(wc -l < "${HASH_LINES_FILE}" | tr -d ' ')
+TOTAL=$(wc -l < "${HASH_ENTRIES_FILE}" | tr -d ' ')
 info "Total de arquivos hasheados: ${TOTAL}"
 
 ROOT_HASH=$(
-  LC_ALL=C sort "${HASH_LINES_FILE}" \
+  LC_ALL=C sort "${HASH_ENTRIES_FILE}" \
     | sha256 | awk '{print $1}'
 )
 
