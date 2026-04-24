@@ -202,6 +202,20 @@ info "Python  : ${PYTHON_VERSION} (${PYTHON312})"
 # ---------------------------------------------------------------------------
 header "Verificando uv (gerenciador de ambientes Python)"
 
+# PEP 632: distutils saiu do stdlib no 3.12. pip/setuptools velhos ou base
+# mínima (ex.: só python3.12 sem python3.12-venv) disparam
+# "ModuleNotFoundError: No module named 'distutils'".
+info "Garantindo pip, setuptools e wheel recentes para ${PYTHON312_CMD}..."
+if ! "$PYTHON312" -m pip install --user --upgrade pip setuptools wheel --quiet
+then
+  info "Retentando após ensurepip..."
+  "$PYTHON312" -m ensurepip --upgrade --default-pip 2>/dev/null || true
+  "$PYTHON312" -m pip install --user --upgrade pip setuptools wheel --quiet \
+    || error "Não foi possível preparar pip/setuptools (distutils não existe" \
+" no Python 3.12). No Ubuntu/Debian: sudo apt install python3.12-venv" \
+" python3-pip; em seguida execute este setup de novo."
+fi
+
 if ! command -v uv &>/dev/null; then
   info "Instalando uv (via ${PYTHON312} -m pip)..."
   "$PYTHON312" -m pip install --user uv --quiet
