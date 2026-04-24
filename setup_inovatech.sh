@@ -5,7 +5,8 @@
 #
 # Execução: bash setup_inovatech.sh  (de dentro de ~/inovatech ou qualquer dir)
 #           curl -fsSL URL/setup_inovatech.sh | bash  (corpo ativo só ao final)
-# Sistema alvo: Ubuntu 22.04 / 24.04 LTS
+# Sistema alvo: Ubuntu 22.04 / 24.04 LTS (Python de sistema: 3.12 via
+#   python3.12 — não depende do que python ou python3 apontam)
 #
 # NOTA SOBRE REPRODUTIBILIDADE:
 #   Todas as versões abaixo são exatas (==X.Y.Z), garantindo que qualquer
@@ -36,6 +37,8 @@ error()   { echo -e "${RED}[ERRO]${RESET}  $*"; exit 1; }
 header()  { echo -e "\n${BOLD}${CYAN}=== $* ===${RESET}\n"; }
 
 SETUP_DATE="2026-04-21"
+# Intérprete do lab: sempre 3.12 (PATH); nunca python/python3 genéricos.
+PYTHON312_CMD="python3.12"
 
 check_cmd() {
   command -v "$1" &>/dev/null || error "Comando '$1' não encontrado. Instale antes de continuar."
@@ -48,7 +51,8 @@ create_python_venv() {
   local packages=("$@")
 
   info "Criando venv em ${project_dir}/.venv ..."
-  "$UV" venv "${project_dir}/.venv" --python python3 --quiet
+  "$UV" venv "${project_dir}/.venv" \
+    --python "${PYTHON312:?}" --quiet
 
   info "Instalando ${#packages[@]} pacotes (versões fixas)..."
   "$UV" pip install \
@@ -182,17 +186,33 @@ info "Diretório raiz: ${BASE_DIR}"
 # ---------------------------------------------------------------------------
 header "Verificando dependências do sistema"
 
-check_cmd python3
-check_cmd pip3
+check_cmd "${PYTHON312_CMD}"
+PYTHON312="$(command -v "${PYTHON312_CMD}")" \
+  || error "Não foi possível resolver o caminho de ${PYTHON312_CMD}."
 
-PYTHON_VERSION=$(python3 --version | awk '{print $2}')
-info "Python  : ${PYTHON_VERSION}"
+PYTHON_VERSION=$("$PYTHON312" --version | awk '{print $2}')
+info "Python  : ${PYTHON_VERSION} (${PYTHON312})"
 
-python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)" \
-  || error "Python 3.11+ é necessário. Encontrado: ${PYTHON_VERSION}"
+"$PYTHON312" -c "import sys; sys.exit(0 if sys.version_info[:2] == (3, 12) else 1)" \
+  || error "Python 3.12.x é obrigatório. Encontrado: ${PYTHON_VERSION}"
 
 # ---------------------------------------------------------------------------
-# 1b. Garantir Node.js 22 via nvm — independente do Node do sistema
+# 2. Instalar uv se não disponível (logo após validar Python 3.12; não
+#    depende de Node/nvm — evita esperar download do Node antes dos venvs)
+# ---------------------------------------------------------------------------
+header "Verificando uv (gerenciador de ambientes Python)"
+
+if ! command -v uv &>/dev/null; then
+  info "Instalando uv (via ${PYTHON312} -m pip)..."
+  "$PYTHON312" -m pip install --user uv --quiet
+  export PATH="$HOME/.local/bin:$PATH"
+fi
+
+UV=$(command -v uv)
+success "uv: $(uv --version)"
+
+# ---------------------------------------------------------------------------
+# 3. Garantir Node.js 22 via nvm — independente do Node do sistema
 #
 # Por que nvm e não o Node do sistema?
 #   O Node instalado no Ubuntu varia por máquina (18, 20, 22...). Para
@@ -256,21 +276,7 @@ echo "${NODE_TARGET_MAJOR}" > "${BASE_DIR}/.nvmrc"
 success ".nvmrc criado em ${BASE_DIR}/.nvmrc → versão ${NODE_TARGET_MAJOR}"
 
 # ---------------------------------------------------------------------------
-# 2. Instalar uv se não disponível
-# ---------------------------------------------------------------------------
-header "Verificando uv (gerenciador de ambientes Python)"
-
-if ! command -v uv &>/dev/null; then
-  info "Instalando uv..."
-  pip3 install --user uv --quiet
-  export PATH="$HOME/.local/bin:$PATH"
-fi
-
-UV=$(command -v uv)
-success "uv: $(uv --version)"
-
-# ---------------------------------------------------------------------------
-# 3. Backend 1 – Django + DRF
+# 4. Backend 1 – Django + DRF
 #   Pacote do projeto: config/ (settings, urls, wsgi). App Django: core/
 #   (não trocar: “app” como nome de projeto conflita com o termo “app” do Django).
 # ---------------------------------------------------------------------------
@@ -327,7 +333,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Backend 2 – FastAPI + SQLModel + Alembic
+# 5. Backend 2 – FastAPI + SQLModel + Alembic
 #   Pacote Python ``api/`` (routers, models, …). Em main.py a variável ``app``
 #   é a instância FastAPI — nome distinto evita confusão com a pasta ``api/``.
 # ---------------------------------------------------------------------------
@@ -413,7 +419,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 5. Backend 3 – Express + TypeORM
+# 6. Backend 3 – Express + TypeORM
 # ---------------------------------------------------------------------------
 header "Backend 3 – Express 4.21.2 + TypeORM 0.3.28 + TypeScript 5.8.3"
 
@@ -486,7 +492,7 @@ fi
 cd "${BASE_DIR}"
 
 # ---------------------------------------------------------------------------
-# 6. Frontend 1 – Vite + TypeScript Vanilla
+# 7. Frontend 1 – Vite + TypeScript Vanilla
 # ---------------------------------------------------------------------------
 header "Frontend 1 – Vite ${VITE_VERSION} + TypeScript ${TS_VERSION} (Vanilla)"
 
@@ -510,7 +516,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 7. Frontend 2 – Vite + TypeScript + React
+# 8. Frontend 2 – Vite + TypeScript + React
 # ---------------------------------------------------------------------------
 header "Frontend 2 – Vite ${VITE_VERSION} + React ${REACT_VERSION} + TypeScript ${TS_VERSION}"
 
@@ -534,7 +540,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 8. Criar pasta de entrega (vazia, pronta para o candidato)
+# 9. Criar pasta de entrega (vazia, pronta para o candidato)
 # ---------------------------------------------------------------------------
 header "Criando pasta de entrega"
 
@@ -543,7 +549,7 @@ mkdir -p "${ENTREGA_DIR}"
 success "Pasta de entrega criada: ${ENTREGA_DIR}"
 
 # ---------------------------------------------------------------------------
-# 9. Embutir script inovatech-submit
+# 10. Embutir script inovatech-submit
 #    O conteúdo é escrito inline aqui para que o setup seja um arquivo único.
 # ---------------------------------------------------------------------------
 header "Instalando comando inovatech-submit"
@@ -750,7 +756,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 10. Embutir script inovatech-seal
+# 11. Embutir script inovatech-seal
 # ---------------------------------------------------------------------------
 header "Instalando comando inovatech-seal"
 
@@ -929,7 +935,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 11. inovatech-versions — listar versões (candidato verifica o ambiente)
+# 12. inovatech-versions — listar versões (candidato verifica o ambiente)
 # ---------------------------------------------------------------------------
 header "Instalando comando inovatech-versions"
 
@@ -985,7 +991,7 @@ json_pkg() {
     echo "  (package.json ausente em ${sub}/)"
     return
   fi
-  python3 -c "
+  python3.12 -c "
 import json, sys
 p = json.load(open(sys.argv[1], encoding='utf-8'))
 d = {**p.get('dependencies', {}), **p.get('devDependencies', {})}
@@ -1005,7 +1011,7 @@ lock_pkg() {
   local lock="${BASE_DIR}/${sub}/package-lock.json"
   local json="${BASE_DIR}/${sub}/package.json"
   if [ -f "${lock}" ]; then
-    python3 -c "
+    python3.12 -c "
 import json, sys
 lock = json.load(open(sys.argv[1], encoding='utf-8'))
 pkgs = lock.get('packages', {})
@@ -1018,7 +1024,7 @@ for k in sys.argv[2:]:
 " "${lock}" "$@"
   elif [ -f "${json}" ]; then
     echo "  (lockfile ausente em ${sub}/ — lendo ranges do package.json)"
-    python3 -c "
+    python3.12 -c "
 import json, sys
 p = json.load(open(sys.argv[1], encoding='utf-8'))
 d = {**p.get('dependencies', {}), **p.get('devDependencies', {})}
@@ -1060,10 +1066,10 @@ if [ -n "${NVM_TARGET}" ]; then
   fi
 fi
 
-if command -v python3 &>/dev/null; then
-  echo "Sistema: $(python3 --version 2>&1) | node ${NODE_VER}${NVM_LABEL} | npm $(npm --version 2>/dev/null || echo '?')"
+if command -v python3.12 &>/dev/null; then
+  echo "Sistema: $(python3.12 --version 2>&1) | node ${NODE_VER}${NVM_LABEL} | npm $(npm --version 2>/dev/null || echo '?')"
 else
-  echo "Sistema: python3 ? | node ${NODE_VER}${NVM_LABEL} | npm $(npm --version 2>/dev/null || echo '?')"
+  echo "Sistema: python3.12 ? | node ${NODE_VER}${NVM_LABEL} | npm $(npm --version 2>/dev/null || echo '?')"
 fi
 echo ""
 echo "backend-django (importlib, fallback pip no .venv):"
@@ -1106,7 +1112,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 12. Relatório final com versões exatas instaladas
+# 13. Relatório final com versões exatas instaladas
 # ---------------------------------------------------------------------------
 header "Configuração concluída — Resumo das versões instaladas"
 
