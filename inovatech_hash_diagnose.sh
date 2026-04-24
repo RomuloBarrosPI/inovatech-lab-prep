@@ -88,6 +88,38 @@ build_entries() {
   done
 }
 
+build_entries_for_project() {
+  local proj="$1"
+  local rel_path=""
+  local hash=""
+
+  if [[ ! -d "${BASE_DIR}/${proj}" ]]; then
+    echo "ERRO: projeto não encontrado: ${BASE_DIR}/${proj}" >&2
+    return 1
+  fi
+
+  while IFS= read -r rel_path; do
+    hash="$(sha256_file "${BASE_DIR}/${rel_path}")"
+    printf '%s\t%s\n' "${rel_path}" "${hash}"
+  done < <(
+    cd "${BASE_DIR}" && find "${proj}" -type f \
+      ! -path "*/.venv/*" \
+      ! -path "*/node_modules/*" \
+      ! -path "*/__pycache__/*" \
+      ! -path "*/.git/*" \
+      ! -path "*/*.pyc" \
+      ! -path "*/*.pyo" \
+      ! -path "*/dist/*" \
+      ! -path "*/.seal/*" \
+      ! -name "*.log" \
+      ! -name ".DS_Store" \
+      ! -name "*.sqlite3" \
+      ! -name "*.db" \
+      ! -name "package-lock.json" \
+      | LC_ALL=C sort
+  )
+}
+
 verify_path="$(command -v inovatech-verify 2>/dev/null || true)"
 verify_checksum="N/A"
 if [[ -n "${verify_path}" && -f "${verify_path}" ]]; then
@@ -151,5 +183,18 @@ echo "TOTAL_FILES=${total_files}"
 echo "VERIFY_HASH=${verify_hash}"
 echo "CANON_INPUT_SHA=${canon_hash}"
 echo "COMPARE_STATUS=${status}"
+for proj in "${PROJECT_DIRS[@]}"; do
+  proj_files="$(
+    build_entries_for_project "${proj}" | wc -l | tr -d ' '
+  )"
+  proj_hash="$(
+    build_entries_for_project "${proj}" \
+      | LC_ALL=C sort \
+      | sha256_line \
+      | awk '{print $1}'
+  )"
+  echo "PROJECT_FILES_${proj}=${proj_files}"
+  echo "PROJECT_CANON_SHA_${proj}=${proj_hash}"
+done
 echo "SAMPLE_ENTRIES_HEAD=${SAMPLE_LINES}"
 build_entries | LC_ALL=C sort | head -n "${SAMPLE_LINES}"
