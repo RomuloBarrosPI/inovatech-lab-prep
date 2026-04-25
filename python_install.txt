@@ -1,0 +1,1 @@
+sudo apt-get download python3.12 python3.12-venv python3.12-minimal libpython3.12-stdlib libpython3.12-minimal
