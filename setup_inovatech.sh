@@ -417,6 +417,10 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {'TITLE': 'INOVATECH API', 'VERSION': '1.0.0'}
+
+# Descomente e ajuste se precisar customizar o modelo de usuário.
+# IMPORTANTE: deve ser definido ANTES da primeira migração.
+# AUTH_USER_MODEL = 'core.User'
 SETTINGS
 
   # ── Hello-world: Model Item ───────────────────────────────────────────────
@@ -548,15 +552,17 @@ create_python_venv "${FASTAPI_DIR}" "${FASTAPI_PACKAGES[@]}"
 
 if [ ! -f "${FASTAPI_DIR}/main.py" ]; then
   info "Criando estrutura do projeto FastAPI..."
-  mkdir -p "${FASTAPI_DIR}"/{api/{routers,models,schemas,services,core},alembic/versions}
+  mkdir -p "${FASTAPI_DIR}"/api/{routers,models,schemas,services,core}
   : > "${FASTAPI_DIR}/api/__init__.py"
   : > "${FASTAPI_DIR}/api/core/__init__.py"
+  : > "${FASTAPI_DIR}/api/schemas/__init__.py"
+  : > "${FASTAPI_DIR}/api/services/__init__.py"
 
   cat > "${FASTAPI_DIR}/api/core/database.py" << 'DB'
 from sqlmodel import create_engine, Session, SQLModel
+from api.core.config import settings
 
-DATABASE_URL = "sqlite:///./database.db"
-engine = create_engine(DATABASE_URL)
+engine = create_engine(settings.DATABASE_URL)
 
 
 def create_db_and_tables():
@@ -567,6 +573,20 @@ def get_session():
     with Session(engine) as session:
         yield session
 DB
+
+  cat > "${FASTAPI_DIR}/api/core/config.py" << 'CONFIG'
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    DATABASE_URL: str = "sqlite:///./database.db"
+    SECRET_KEY: str = "inovatech-fastapi-secret-prova"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+
+
+settings = Settings()
+CONFIG
 
   # ── Hello-world: Model Item ───────────────────────────────────────────────
   cat > "${FASTAPI_DIR}/api/models/item.py" << 'ITEM_MODEL'
@@ -588,7 +608,7 @@ from sqlmodel import Session, select
 from api.core.database import get_session
 from api.models.item import Item
 
-router = APIRouter(prefix="/items", tags=["items"])
+router = APIRouter(prefix="/api/items", tags=["items"])
 
 
 @router.get("/")
@@ -631,37 +651,10 @@ def health():
     return {"status": "ok"}
 MAIN
 
-  cat > "${FASTAPI_DIR}/alembic.ini" << 'INI'
-[alembic]
-script_location = alembic
-sqlalchemy.url = sqlite:///./database.db
-[loggers]
-keys = root,sqlalchemy,alembic
-[handlers]
-keys = console
-[formatters]
-keys = generic
-[logger_root]
-level = WARN
-handlers = console
-qualname =
-[logger_sqlalchemy]
-level = WARN
-handlers =
-qualname = sqlalchemy.engine
-[logger_alembic]
-level = INFO
-handlers =
-qualname = alembic
-[handler_console]
-class = StreamHandler
-args = (sys.stderr,)
-level = NOTSET
-formatter = generic
-[formatter_generic]
-format = %(levelname)-5.5s [%(name)s] %(message)s
-datefmt = %H:%M:%S
-INI
+  # Nota: Alembic está instalado no .venv mas não pré-configurado.
+  # O create_db_and_tables() no lifespan é suficiente para a prova.
+  # Candidatos que desejem usar Alembic podem inicializá-lo com:
+  #   cd backend-fastapi && source .venv/bin/activate && alembic init alembic
 
   success "Projeto FastAPI criado em ${FASTAPI_DIR}"
 else
@@ -771,7 +764,7 @@ app.use(express.json());
 app.get("/health", (_req, res) =>
   res.json({ status: "ok" })
 );
-app.use("/items", itemsRouter);
+app.use("/api/items", itemsRouter);
 
 const PORT = process.env.PORT || 3000;
 
@@ -821,6 +814,14 @@ if [ ! -d "${VANILLA_DIR}" ]; then
 
   # ── Branding INOVATECH ──────────────────────────────────────────────────
   cp "${BASE_DIR}/logo-inovatech.png" public/logo-inovatech.png
+
+  # ── Pasta de imagens de figurinhas (prova prática) ─────────────────────
+  # As imagens devem ser colocadas aqui antes da prova. Candidatos
+  # referenciam como /assets/figurinhas/nome_da_imagem.png no frontend.
+  mkdir -p public/assets/figurinhas
+  if [ -d "${BASE_DIR}/figurinhas" ]; then
+    cp -r "${BASE_DIR}/figurinhas/"* public/assets/figurinhas/ 2>/dev/null || true
+  fi
 
   cat > index.html << 'HTML'
 <!DOCTYPE html>
@@ -977,13 +978,13 @@ const backends: Backend[] = [
   {
     title: "FastAPI + SQLModel",
     tech: "Python 3.12 · FastAPI · Pydantic v2",
-    api: "http://localhost:8000/items/",
+    api: "http://localhost:8000/api/items/",
     docs: "http://localhost:8000/docs",
   },
   {
     title: "Express + TypeORM",
     tech: "Node.js 22 · TypeScript · SQLite",
-    api: "http://localhost:3000/items",
+    api: "http://localhost:3000/api/items",
     docs: "http://localhost:3000/health",
   },
 ];
@@ -1082,6 +1083,12 @@ if [ ! -d "${REACT_DIR}" ]; then
 
   # ── Branding INOVATECH ──────────────────────────────────────────────────
   cp "${BASE_DIR}/logo-inovatech.png" public/logo-inovatech.png
+
+  # ── Pasta de imagens de figurinhas (prova prática) ─────────────────────
+  mkdir -p public/assets/figurinhas
+  if [ -d "${BASE_DIR}/figurinhas" ]; then
+    cp -r "${BASE_DIR}/figurinhas/"* public/assets/figurinhas/ 2>/dev/null || true
+  fi
 
   cat > index.html << 'HTML'
 <!DOCTYPE html>
@@ -1242,13 +1249,13 @@ const backends: Backend[] = [
   {
     title: "FastAPI + SQLModel",
     tech: "Python 3.12 · FastAPI · Pydantic v2",
-    api: "http://localhost:8000/items/",
+    api: "http://localhost:8000/api/items/",
     docs: "http://localhost:8000/docs",
   },
   {
     title: "Express + TypeORM",
     tech: "Node.js 22 · TypeScript · SQLite",
-    api: "http://localhost:3000/items",
+    api: "http://localhost:3000/api/items",
     docs: "http://localhost:3000/health",
   },
 ];
@@ -1319,6 +1326,22 @@ APPTSX
 
   # Remove artefatos do template padrão do Vite
   rm -f src/assets/react.svg public/vite.svg 2>/dev/null || true
+
+  # ── main.tsx com BrowserRouter pré-configurado ─────────────────────────
+  cat > src/main.tsx << 'MAINTSX'
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import App from "./App";
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  </StrictMode>
+);
+MAINTSX
 
   success "Frontend React criado em ${REACT_DIR}"
   cd "${BASE_DIR}"

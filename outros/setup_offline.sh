@@ -769,6 +769,14 @@ TSC
   # ── Branding INOVATECH ──────────────────────────────────────────────────
   cp "${BASE_DIR}/logo-inovatech.png" public/logo-inovatech.png
 
+  # ── Pasta de imagens de figurinhas (prova prática) ─────────────────────
+  # As imagens devem ser colocadas aqui antes da prova. Candidatos
+  # referenciam como /assets/figurinhas/nome_da_imagem.png no frontend.
+  mkdir -p public/assets/figurinhas
+  if [ -d "${BASE_DIR}/figurinhas" ]; then
+    cp -r "${BASE_DIR}/figurinhas/"* public/assets/figurinhas/ 2>/dev/null || true
+  fi
+
   cat > index.html << 'HTML'
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -1073,6 +1081,14 @@ VITECFG
 
   # ── Branding INOVATECH ──────────────────────────────────────────────────
   cp "${BASE_DIR}/logo-inovatech.png" public/logo-inovatech.png
+
+  # ── Pasta de imagens de figurinhas (prova prática) ─────────────────────
+  # As imagens devem ser colocadas aqui antes da prova. Candidatos
+  # referenciam como /assets/figurinhas/nome_da_imagem.png no frontend.
+  mkdir -p public/assets/figurinhas
+  if [ -d "${BASE_DIR}/figurinhas" ]; then
+    cp -r "${BASE_DIR}/figurinhas/"* public/assets/figurinhas/ 2>/dev/null || true
+  fi
 
   cat > index.html << 'HTML'
 <!DOCTYPE html>
