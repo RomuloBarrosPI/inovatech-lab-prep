@@ -768,6 +768,14 @@ TSC
 
   # ── Branding INOVATECH ──────────────────────────────────────────────────
   cp "${BASE_DIR}/logo-inovatech.png" public/logo-inovatech.png
+  for COPA in logo-copa-inovatech.png logo-copa-inovatech-preto.png; do
+    if [[ -f "${BASE_DIR}/${COPA}" ]]; then
+      cp "${BASE_DIR}/${COPA}" "public/${COPA}"
+    else
+      warn "Opcional: ${COPA} não encontrado — coloque-o em ${BASE_DIR}" \
+        " para os logos aparecerem na página inicial dos frontends."
+    fi
+  done
 
   # ── Pasta de imagens de figurinhas (prova prática) ─────────────────────
   # As imagens devem ser colocadas aqui antes da prova. Candidatos
@@ -784,7 +792,7 @@ TSC
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/logo-inovatech.png" />
-    <title>INOVATECH</title>
+    <title>INOVATECH · InovaCup 2026</title>
   </head>
   <body>
     <div id="app"></div>
@@ -797,7 +805,7 @@ HTML
 :root {
   --navy: #1b2a4a;
   --navy-light: #2d4373;
-  --gray-bg: #f4f6f9;
+  --gray-bg: #eef2f7;
   --white: #ffffff;
   --text: #333333;
   --text-muted: #6b7280;
@@ -806,11 +814,19 @@ HTML
   --radius: 12px;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
 body {
-  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-  background: var(--gray-bg);
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  background: linear-gradient(180deg, var(--gray-bg) 0%, #e8ecf4 100%);
   color: var(--text);
   min-height: 100vh;
   display: flex;
@@ -820,25 +836,110 @@ body {
 }
 
 #app {
-  max-width: 820px;
+  max-width: 880px;
   width: 100%;
 }
 
 .header {
   text-align: center;
-  margin-bottom: 2.5rem;
+  margin-bottom: 1.5rem;
 }
 
-.header img {
-  height: 80px;
-  margin-bottom: 1rem;
+.brand-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem 2rem;
+  margin-bottom: 0.85rem;
+}
+
+.brand-row .logo-ifpi {
+  height: 56px;
+  width: auto;
+}
+
+.brand-row .logo-copa {
+  max-height: 76px;
+  width: auto;
+}
+
+.exam-meta {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 0.65rem;
+  line-height: 1.5;
 }
 
 .header h1 {
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   color: var(--navy);
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.02em;
+  margin-top: 0.25rem;
+}
+
+.briefing {
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.45rem;
+  margin-bottom: 2rem;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    0 4px 14px rgba(27, 42, 74, 0.06);
+  border: 1px solid rgba(27, 42, 74, 0.08);
+}
+
+.briefing h2 {
+  font-size: 0.98rem;
+  color: var(--navy);
+  margin: 1.35rem 0 0.5rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.briefing h2:first-child {
+  margin-top: 0;
+}
+
+.briefing p,
+.briefing li {
+  font-size: 0.89rem;
+  line-height: 1.56;
+}
+
+.briefing ul,
+.briefing ol {
+  padding-left: 1.35rem;
+  margin: 0.45rem 0 0.35rem;
+}
+
+.briefing-note {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  padding: 0.65rem 0.85rem;
+  background: var(--gray-bg);
+  border-radius: 8px;
+  margin-top: 0.85rem;
+  border-left: 3px solid var(--navy-light);
+}
+
+.lab-section {
+  margin-top: 0.5rem;
+}
+
+.section-title {
+  font-size: 1rem;
+  color: var(--navy);
+  font-weight: 700;
+  margin-bottom: 0.65rem;
+}
+
+.lab-section .hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  line-height: 1.5;
 }
 
 .cards {
@@ -852,7 +953,9 @@ body {
   border-radius: var(--radius);
   padding: 1.5rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  transition: box-shadow 0.2s, transform 0.2s;
+  transition:
+    box-shadow 0.2s,
+    transform 0.2s;
 }
 
 .card:hover {
@@ -882,7 +985,9 @@ body {
   word-break: break-all;
 }
 
-.card .links a { color: var(--navy-light); }
+.card .links a {
+  color: var(--navy-light);
+}
 
 .btn-fetch {
   display: inline-block;
@@ -907,8 +1012,49 @@ body {
   min-height: 1.2em;
 }
 
-.result.ok  { color: var(--green); }
-.result.err { color: var(--red); }
+.result.ok {
+  color: var(--green);
+}
+
+.result.err {
+  color: var(--red);
+}
+
+.briefing code,
+.lab-section code {
+  font-size: 0.85em;
+  background: #f1f5f9;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+kbd {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+  background: #f1f5f9;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.footer-copa {
+  margin-top: 2rem;
+  padding: 1.35rem 1rem;
+  background: linear-gradient(135deg, #1b2a4a 0%, #243a66 100%);
+  text-align: center;
+  border-radius: var(--radius);
+}
+
+.footer-copa img {
+  max-height: 72px;
+  width: auto;
+}
+
+.footer-caption {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.65);
+  margin-top: 0.65rem;
+}
 CSS
 
   cat > src/main.ts << 'MAIN_TS'
@@ -943,26 +1089,109 @@ const backends: Backend[] = [
   },
 ];
 
+function briefingHtml(): string {
+  const lines = [
+    '<article class="briefing">',
+    '<h2>O que você vai construir</h2>',
+    "<p>O <strong>Copa do Mundo InovaTech 2026: O Álbum das Lendas</strong> ",
+    "é uma plataforma colaborativa para colecionadores de figurinhas de jogadores lendários ",
+    "(contexto oficial da sua prova prática).</p>",
+    "<p>Aplicação em <strong>API RESTful</strong> (backend) e <strong>interface web funcional </strong>",
+    "(frontend), integradas, usando <strong>SQLite</strong> nas versões fixadas ",
+    "(Notas Técnicas 03, 04 e 05).</p>",
+    "<h2>2. Requisitos previstos no edital</h2>",
+    "<p><strong>2.1 Autenticação e perfil:</strong> cadastro (nome, e-mail, senha), ",
+    "login com token (JWT diferencial); rota autenticada <code>/me</code>.</p>",
+    "<p><strong>2.2 Álbum:</strong> figurinhas com nome do jogador, bio, posição, tags de ",
+    "raridade e imagem; cofre para ocultar da listagem pública sem excluir; visitantes só ",
+    "veem nomes, sem detalhes.</p>",
+    "<p><strong>2.3 Votação:</strong> um voto por figurinha (+1 Craque ou −1 Bagre); totais ",
+    "e saldo; destaque visual verde ou vermelho no card.</p>",
+    "<p><strong>2.4 Interação:</strong> comentários e likes com toggle (desfazer).</p>",
+    "<h2>O que não entra nestes 3 h</h2>",
+    "<ul>",
+    "<li>Recuperação de senha por e-mail ou serviços externos.</li>",
+    "<li>Editar figurinha depois de publicada (imutabilidade).</li>",
+    "<li>Docker ou deploy em nuvem — entrega local.</li>",
+    "</ul>",
+    "<h2>Como começar a partir deste laboratório</h2>",
+    "<ol>",
+    "<li>Este pacote já contém backends e frontends exemplo (hello-world <code>/items</code>), ",
+    "com versões pré-instaladas. Substitua esse esqueleto pela sua solução do Álbum.",
+    "</li>",
+    "<li>Use <kbd>python3.12</kbd> nos projetos Python; ative cada <code>.venv</code>; em Node ",
+    "<code>nvm use</code> segundo o pacote gerado pelo setup.</li>",
+    "<li>Rode seus servidores (um backend + seu front) e teste o fluxo ponta a ponta.</li>",
+    "<li>Figurinhas estáticas: neste lab coloque arquivos em ",
+    "<code>public/assets/figurinhas/</code> e referencie como ",
+    "<code>/assets/figurinhas/nome.ext</code> (o edital pode citar <code>/assets/cards/</code> — ",
+    "ajuste o caminho se a banca exigir exatamente essa pasta).</li>",
+    "<li>Antes de encerrar: renomeie a pasta de entrega para <code>entrega_##</code> e ",
+    "execute <code>inovatech-submit</code> no terminal.</li>",
+    "</ol>",
+    '<p class="briefing-note">Critérios de avaliação (200 pts cada): backend, frontend, ',
+    "requisitos de negócio, qualidade de código e README com arquitetura e ",
+    "instruções de execução (Nota Técnica 02/2026).</p>",
+    "</article>",
+  ];
+  return lines.join("");
+}
+
+function headerHtml(): string {
+  const parts = [
+    '<header class="header">',
+    '<div class="brand-row">',
+    '<img class="logo-ifpi" src="/logo-inovatech.png"',
+    ' alt="Programa Residência em Inovação Tecnológica GAB IFPI" />',
+    '<img class="logo-copa" src="/logo-copa-inovatech.png"',
+    ' alt="Copa do Mundo InovaTech 2026 — identidade fictícia" />',
+    "</div>",
+    '<p class="exam-meta">',
+    "<strong>Prova Prática INOVATECH 2026</strong> · 02 de maio de 2026 · ",
+    "Processo Seletivo — Residência em Inovação Tecnológica · ",
+    "Edital 30/2026 — GAB/REI/IFPI.",
+    "</p>",
+    "<h1>Copa do Mundo InovaTech · O Álbum das Lendas</h1>",
+    "</header>",
+  ];
+  return parts.join("");
+}
+
+function footerHtml(): string {
+  const parts = [
+    '<footer class="footer-copa">',
+    '<img src="/logo-copa-inovatech-preto.png" ',
+    'alt="Copa do Mundo InovaTech — variante para fundo escuro" />',
+    '<p class="footer-caption">Logo fictício — variante para fundos escuros.</p>',
+    "</footer>",
+  ];
+  return parts.join("");
+}
+
 function render(): void {
   const app = document.getElementById("app")!;
-  app.innerHTML = `
-    <div class="header">
-      <img src="/logo-inovatech.png" alt="INOVATECH" />
-      <h1>Residência em Inovação Tecnológica</h1>
-    </div>
-    <div class="cards">
-      ${backends.map(cardHTML).join("")}
-    </div>
-  `;
+  app.innerHTML =
+    headerHtml() +
+    briefingHtml() +
+    '<section class="lab-section">' +
+    '<h2 class="section-title">Ambiente técnico (hello-world pré-configurado)</h2>' +
+    "<p class=\"hint\">URLs de exemplo já amarradas para cada stack abaixo (Django usa " +
+    "<code>/api/items/</code>; FastAPI e Express, rotas sem <code>/api</code> neste pacote). " +
+    "Troque por sua própria API do Álbum. Suba os backends antes de clicar nos botões.</p>" +
+    '<div class="cards">' +
+    backends.map(cardHTML).join("") +
+    "</div>" +
+    "</section>" +
+    footerHtml();
 
-  document.querySelectorAll<HTMLButtonElement>(".btn-fetch")
-    .forEach((btn) => {
-      btn.addEventListener("click", () => fetchItems(btn));
-    });
+  document.querySelectorAll<HTMLButtonElement>(".btn-fetch").forEach((btn) => {
+    btn.addEventListener("click", () => fetchItems(btn));
+  });
 }
 
 function cardHTML(b: Backend, i: number): string {
-  return `
+  return (
+    `
     <div class="card">
       <h2>${b.title}</h2>
       <p class="tech">${b.tech}</p>
@@ -974,7 +1203,8 @@ function cardHTML(b: Backend, i: number): string {
               data-idx="${i}">Listar Items</button>
       <div class="result" id="result-${i}"></div>
     </div>
-  `;
+  `
+  );
 }
 
 async function fetchItems(btn: HTMLButtonElement): Promise<void> {
@@ -1081,6 +1311,14 @@ VITECFG
 
   # ── Branding INOVATECH ──────────────────────────────────────────────────
   cp "${BASE_DIR}/logo-inovatech.png" public/logo-inovatech.png
+  for COPA in logo-copa-inovatech.png logo-copa-inovatech-preto.png; do
+    if [[ -f "${BASE_DIR}/${COPA}" ]]; then
+      cp "${BASE_DIR}/${COPA}" "public/${COPA}"
+    else
+      warn "Opcional: ${COPA} não encontrado — coloque-o em ${BASE_DIR}" \
+        " para os logos aparecerem na página inicial dos frontends."
+    fi
+  done
 
   # ── Pasta de imagens de figurinhas (prova prática) ─────────────────────
   # As imagens devem ser colocadas aqui antes da prova. Candidatos
@@ -1097,7 +1335,7 @@ VITECFG
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/logo-inovatech.png" />
-    <title>INOVATECH</title>
+    <title>INOVATECH · InovaCup 2026</title>
   </head>
   <body>
     <div id="root"></div>
@@ -1110,7 +1348,7 @@ HTML
 :root {
   --navy: #1b2a4a;
   --navy-light: #2d4373;
-  --gray-bg: #f4f6f9;
+  --gray-bg: #eef2f7;
   --white: #ffffff;
   --text: #333333;
   --text-muted: #6b7280;
@@ -1119,35 +1357,130 @@ HTML
   --radius: 12px;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
 body {
-  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-  background: var(--gray-bg);
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  background: linear-gradient(180deg, var(--gray-bg) 0%, #e8ecf4 100%);
   color: var(--text);
   min-height: 100vh;
+  padding: 2rem 1rem;
 }
 
 .container {
-  max-width: 860px;
+  max-width: 880px;
+  width: 100%;
   margin: 0 auto;
-  padding: 2rem 1rem;
 }
 
 .header {
   text-align: center;
-  margin-bottom: 2.5rem;
+  margin-bottom: 1.5rem;
 }
 
-.header img {
-  height: 80px;
-  margin-bottom: 1rem;
+.brand-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem 2rem;
+  margin-bottom: 0.85rem;
+}
+
+.brand-row .logo-ifpi {
+  height: 56px;
+  width: auto;
+}
+
+.brand-row .logo-copa {
+  max-height: 76px;
+  width: auto;
+}
+
+.exam-meta {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 0.65rem;
+  line-height: 1.5;
 }
 
 .header h1 {
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   color: var(--navy);
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-top: 0.25rem;
+}
+
+.briefing {
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.45rem;
+  margin-bottom: 2rem;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    0 4px 14px rgba(27, 42, 74, 0.06);
+  border: 1px solid rgba(27, 42, 74, 0.08);
+}
+
+.briefing h2 {
+  font-size: 0.98rem;
+  color: var(--navy);
+  margin: 1.35rem 0 0.5rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.briefing h2:first-child {
+  margin-top: 0;
+}
+
+.briefing p,
+.briefing li {
+  font-size: 0.89rem;
+  line-height: 1.56;
+}
+
+.briefing ul,
+.briefing ol {
+  padding-left: 1.35rem;
+  margin: 0.45rem 0 0.35rem;
+}
+
+.briefing-note {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  padding: 0.65rem 0.85rem;
+  background: var(--gray-bg);
+  border-radius: 8px;
+  margin-top: 0.85rem;
+  border-left: 3px solid var(--navy-light);
+}
+
+.lab-section {
+  margin-top: 0.5rem;
+}
+
+.section-title {
+  font-size: 1rem;
+  color: var(--navy);
+  font-weight: 700;
+  margin-bottom: 0.65rem;
+}
+
+.lab-section .hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  line-height: 1.5;
 }
 
 .cards {
@@ -1161,7 +1494,9 @@ body {
   border-radius: var(--radius);
   padding: 1.5rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  transition: box-shadow 0.2s, transform 0.2s;
+  transition:
+    box-shadow 0.2s,
+    transform 0.2s;
 }
 
 .card:hover {
@@ -1218,8 +1553,49 @@ body {
   min-height: 1.2em;
 }
 
-.result.ok  { color: var(--green); }
-.result.err { color: var(--red); }
+.result.ok {
+  color: var(--green);
+}
+
+.result.err {
+  color: var(--red);
+}
+
+.briefing code,
+.lab-section code {
+  font-size: 0.85em;
+  background: #f1f5f9;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+kbd {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+  background: #f1f5f9;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.footer-copa {
+  margin-top: 2rem;
+  padding: 1.35rem 1rem;
+  background: linear-gradient(135deg, #1b2a4a 0%, #243a66 100%);
+  text-align: center;
+  border-radius: var(--radius);
+}
+
+.footer-copa img {
+  max-height: 72px;
+  width: auto;
+}
+
+.footer-caption {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.65);
+  margin-top: 0.65rem;
+}
 APPCSS
 
   cat > src/App.tsx << 'APPTSX'
@@ -1260,6 +1636,86 @@ const backends: Backend[] = [
   },
 ];
 
+function Briefing() {
+  return (
+    <article className="briefing">
+      <h2>O que você vai construir</h2>
+      <p>
+        O{" "}
+        <strong>
+          Copa do Mundo InovaTech 2026: O Álbum das Lendas
+        </strong>{" "}
+        é uma plataforma colaborativa para colecionadores de figurinhas de
+        jogadores lendários (contexto oficial da sua prova prática).
+      </p>
+      <p>
+        Aplicação em <strong>API RESTful</strong> (backend) e{" "}
+        <strong>interface web funcional</strong> (frontend), integradas, usando{" "}
+        <strong>SQLite</strong> nas versões fixadas (Notas Técnicas 03, 04 e 05).
+      </p>
+      <h2>2. Requisitos previstos no edital</h2>
+      <p>
+        <strong>2.1 Autenticação e perfil:</strong> cadastro (nome, e-mail,
+        senha), login com token (JWT diferencial); rota autenticada{" "}
+        <code>/me</code>.
+      </p>
+      <p>
+        <strong>2.2 Álbum:</strong> figurinhas com nome do jogador, bio,
+        posição, tags de raridade e imagem; cofre para ocultar da listagem
+        pública sem excluir; visitantes só veem nomes, sem detalhes.
+      </p>
+      <p>
+        <strong>2.3 Votação:</strong> um voto por figurinha (+1 Craque ou −1
+        Bagre); totais e saldo; destaque visual verde ou vermelho no card.
+      </p>
+      <p>
+        <strong>2.4 Interação:</strong> comentários e likes com toggle
+        (desfazer).
+      </p>
+      <h2>O que não entra nestes 3 h</h2>
+      <ul>
+        <li>Recuperação de senha por e-mail ou serviços externos.</li>
+        <li>Editar figurinha depois de publicada (imutabilidade).</li>
+        <li>Docker ou deploy em nuvem — entrega local.</li>
+      </ul>
+      <h2>Como começar a partir deste laboratório</h2>
+      <ol>
+        <li>
+          Este pacote já contém backends e frontends exemplo (hello-world{" "}
+          <code>/items</code>), com versões pré-instaladas. Substitua esse
+          esqueleto pela sua solução do Álbum.
+        </li>
+        <li>
+          Use <kbd>python3.12</kbd> nos projetos Python; ative cada{" "}
+          <code>.venv</code>; em Node <code>nvm use</code> segundo o pacote
+          gerado pelo setup.
+        </li>
+        <li>
+          Rode seus servidores (um backend + seu front) e teste o fluxo ponta a
+          ponta.
+        </li>
+        <li>
+          Figurinhas estáticas: neste lab coloque arquivos em{" "}
+          <code>public/assets/figurinhas/</code> e referencie como{" "}
+          <code>/assets/figurinhas/nome.ext</code> (o edital pode citar{" "}
+          <code>/assets/cards/</code> — ajuste o caminho se a banca exigir
+          exatamente essa pasta).
+        </li>
+        <li>
+          Antes de encerrar: renomeie a pasta de entrega para{" "}
+          <code>entrega_##</code> e execute <code>inovatech-submit</code> no
+          terminal.
+        </li>
+      </ol>
+      <p className="briefing-note">
+        Critérios de avaliação (200 pts cada): backend, frontend, requisitos de
+        negócio, qualidade de código e README com arquitetura e instruções de
+        execução (Nota Técnica 02/2026).
+      </p>
+    </article>
+  );
+}
+
 function BackendCard({ b }: { b: Backend }) {
   const [result, setResult] = useState("");
   const [cls, setCls] = useState("");
@@ -1273,9 +1729,7 @@ function BackendCard({ b }: { b: Backend }) {
       if (items.length === 0) {
         setResult("OK — lista vazia (0 items)");
       } else {
-        setResult(
-          items.map((it) => `#${it.id} ${it.name}`).join(", ")
-        );
+        setResult(items.map((it) => `#${it.id} ${it.name}`).join(", "));
       }
       setCls("ok");
     } catch {
@@ -1290,16 +1744,16 @@ function BackendCard({ b }: { b: Backend }) {
       <p className="tech">{b.tech}</p>
       <div className="links">
         API:{" "}
-        <a href={b.api} target="_blank">
+        <a href={b.api} target="_blank" rel="noreferrer">
           {b.api}
         </a>
         <br />
         Docs:{" "}
-        <a href={b.docs} target="_blank">
+        <a href={b.docs} target="_blank" rel="noreferrer">
           {b.docs}
         </a>
       </div>
-      <button className="btn-fetch" onClick={fetchItems}>
+      <button type="button" className="btn-fetch" onClick={fetchItems}>
         Listar Items
       </button>
       <p className={`result ${cls}`}>{result}</p>
@@ -1310,19 +1764,56 @@ function BackendCard({ b }: { b: Backend }) {
 export default function App() {
   return (
     <div className="container">
-      <div className="header">
-        <img src="/logo-inovatech.png" alt="INOVATECH" />
-        <h1>Residência em Inovação Tecnológica</h1>
-      </div>
-      <div className="cards">
-        {backends.map((b) => (
-          <BackendCard key={b.title} b={b} />
-        ))}
-      </div>
+      <header className="header">
+        <div className="brand-row">
+          <img
+            className="logo-ifpi"
+            src="/logo-inovatech.png"
+            alt="Programa Residência em Inovação Tecnológica GAB IFPI"
+          />
+          <img
+            className="logo-copa"
+            src="/logo-copa-inovatech.png"
+            alt="Copa do Mundo InovaTech 2026 — identidade fictícia"
+          />
+        </div>
+        <p className="exam-meta">
+          <strong>Prova Prática INOVATECH 2026</strong> · 02 de maio de 2026 ·
+          Processo Seletivo — Residência em Inovação Tecnológica · Edital 30/2026
+          — GAB/REI/IFPI.
+        </p>
+        <h1>Copa do Mundo InovaTech · O Álbum das Lendas</h1>
+      </header>
+      <Briefing />
+      <section className="lab-section">
+        <h2 className="section-title">
+          Ambiente técnico (hello-world pré-configurado)
+        </h2>
+        <p className="hint">
+          Neste pacote offline, cada stack usa a URL exibida no card (nem todas são <code>/api/items/</code>). Troque pela sua própria API do Álbum.
+          Suba os backends antes de clicar nos
+          botões.
+        </p>
+        <div className="cards">
+          {backends.map((b) => (
+            <BackendCard key={b.title} b={b} />
+          ))}
+        </div>
+      </section>
+      <footer className="footer-copa">
+        <img
+          src="/logo-copa-inovatech-preto.png"
+          alt="Copa do Mundo InovaTech — variante para fundo escuro"
+        />
+        <p className="footer-caption">
+          Logo fictício — variante para fundos escuros.
+        </p>
+      </footer>
     </div>
   );
 }
 APPTSX
+
 
   # Remove artefatos do template padrão do Vite
   rm -f src/assets/react.svg public/vite.svg 2>/dev/null || true
