@@ -45,6 +45,19 @@ warn()    { echo -e "${YELLOW}[AVISO]${RESET} $*"; }
 error()   { echo -e "${RED}[ERRO]${RESET}  $*"; exit 1; }
 header()  { echo -e "\n${BOLD}${CYAN}=== $* ===${RESET}\n"; }
 
+inovatech_ascii_banner() {
+  echo -e "${BOLD}${CYAN}"
+  cat << 'INVASCII'
+██╗███╗   ██╗ ██████╗ ██╗   ██╗ █████╗ ████████╗███████╗ ██████╗██╗  ██╗
+██║████╗  ██║██╔═══██╗██║   ██║██╔══██╗╚══██╔══╝██╔════╝██╔════╝██║  ██║
+██║██╔██╗ ██║██║   ██║██║   ██║███████║   ██║   █████╗  ██║     ███████║
+██║██║╚██╗██║██║   ██║╚██╗ ██╔╝██╔══██║   ██║   ██╔══╝  ██║     ██╔══██║
+██║██║ ╚████║╚██████╔╝ ╚████╔╝ ██║  ██║   ██║   ███████╗╚██████╗██║  ██║
+╚═╝╚═╝  ╚═══╝ ╚═════╝   ╚═══╝  ╚═╝  ╚═╝   ╚═╝   ╚══════╝ ╚═════╝╚═╝  ╚═╝
+INVASCII
+  echo -e "${RESET}"
+}
+
 # Zera selagem, entregas e projetos base quando o assessor reexecuta o setup
 # no mesmo diretório — BASE_DIR deve estar definido (run_inovatech_setup).
 inovatech_maybe_reset_lab_tree() {
@@ -247,6 +260,9 @@ GITHUB_RAW="https://raw.githubusercontent.com/RomuloBarrosPI/inovatech-lab-prep/
 run_inovatech_setup() {
 BASE_DIR="$(pwd)"
 
+echo ""
+inovatech_ascii_banner
+echo ""
 header "INOVATECH – Setup dos Projetos Base (versões fixas de ${SETUP_DATE})"
 info "Diretório raiz: ${BASE_DIR}"
 
@@ -1988,6 +2004,7 @@ sha256() {
 }
 
 inovatech_ascii_banner() {
+  echo -e "${BOLD}${CYAN}"
   cat << 'INVASCII'
 ██╗███╗   ██╗ ██████╗ ██╗   ██╗ █████╗ ████████╗███████╗ ██████╗██╗  ██╗
 ██║████╗  ██║██╔═══██╗██║   ██║██╔══██╗╚══██╔══╝██╔════╝██╔════╝██║  ██║
@@ -1996,6 +2013,7 @@ inovatech_ascii_banner() {
 ██║██║ ╚████║╚██████╔╝ ╚████╔╝ ██║  ██║   ██║   ███████╗╚██████╗██║  ██║
 ╚═╝╚═╝  ╚═══╝ ╚═════╝   ╚═══╝  ╚═╝  ╚═╝   ╚═╝   ╚══════╝ ╚═════╝╚═╝  ╚═╝
 INVASCII
+  echo -e "${RESET}"
 }
 
 # --dir: caminho explícito. Caso contrário, detecção em ~/inovatech/ (ver
@@ -2734,6 +2752,7 @@ sha256() {
 }
 
 inovatech_ascii_banner() {
+  echo -e "${BOLD}${CYAN}"
   cat << 'INVASCII'
 ██╗███╗   ██╗ ██████╗ ██╗   ██╗ █████╗ ████████╗███████╗ ██████╗██╗  ██╗
 ██║████╗  ██║██╔═══██╗██║   ██║██╔══██╗╚══██╔══╝██╔════╝██╔════╝██║  ██║
@@ -2742,6 +2761,7 @@ inovatech_ascii_banner() {
 ██║██║ ╚████║╚██████╔╝ ╚████╔╝ ██║  ██║   ██║   ███████╗╚██████╗██║  ██║
 ╚═╝╚═╝  ╚═══╝ ╚═════╝   ╚═══╝  ╚═╝  ╚═╝   ╚═╝   ╚══════╝ ╚═════╝╚═╝  ╚═╝
 INVASCII
+  echo -e "${RESET}"
 }
 
 BASE_DIR="$(pwd)"
@@ -2939,6 +2959,7 @@ warn()    { echo -e "${YELLOW}[AVISO]${RESET} $*"; }
 error()   { echo -e "${RED}[ERRO]${RESET}  $*"; exit 1; }
 
 inovatech_ascii_banner() {
+  echo -e "${BOLD}${CYAN}"
   cat << 'INVASCII'
 ██╗███╗   ██╗ ██████╗ ██╗   ██╗ █████╗ ████████╗███████╗ ██████╗██╗  ██╗
 ██║████╗  ██║██╔═══██╗██║   ██║██╔══██╗╚══██╔══╝██╔════╝██╔════╝██║  ██║
@@ -2947,6 +2968,7 @@ inovatech_ascii_banner() {
 ██║██║ ╚████║╚██████╔╝ ╚████╔╝ ██║  ██║   ██║   ███████╗╚██████╗██║  ██║
 ╚═╝╚═╝  ╚═══╝ ╚═════╝   ╚═══╝  ╚═╝  ╚═╝   ╚═╝   ╚══════╝ ╚═════╝╚═╝  ╚═╝
 INVASCII
+  echo -e "${RESET}"
 }
 
 sha256() {
@@ -3177,6 +3199,7 @@ for k in sys.argv[2:]:
   fi
 }
 
+echo -e "${BOLD}${CYAN}"
 cat << 'INVASCII'
 ██╗███╗   ██╗ ██████╗ ██╗   ██╗ █████╗ ████████╗███████╗ ██████╗██╗  ██╗
 ██║████╗  ██║██╔═══██╗██║   ██║██╔══██╗╚══██╔══╝██╔════╝██╔════╝██║  ██║
@@ -3185,6 +3208,7 @@ cat << 'INVASCII'
 ██║██║ ╚████║╚██████╔╝ ╚████╔╝ ██║  ██║   ██║   ███████╗╚██████╗██║  ██║
 ╚═╝╚═╝  ╚═══╝ ╚═════╝   ╚═══╝  ╚═╝  ╚═╝   ╚═╝   ╚══════╝ ╚═════╝╚═╝  ╚═╝
 INVASCII
+echo -e "${RESET}"
 
 echo ""
 echo "INOVATECH – versões principais (base: ${BASE_DIR})"
