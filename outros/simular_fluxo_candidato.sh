@@ -13,6 +13,9 @@
 #   • ~/inovatech com os cinco projetos base (após setup).
 #   • Comandos inovatech-* instalados no PATH.
 #
+# Matriz completa (6 stacks + smoke HTTP local): ver
+#   outros/testar_todas_combinacoes_lab.sh
+#
 # Variáveis opcionais (laboratório = ~/inovatech, como no preparar-entrega):
 #   INOVATECH_CODIGO_PP     código 01–40 (default: 01)
 #   INOVATECH_NOME_COMPLETO nome no comprovante (default abaixo)
@@ -91,9 +94,10 @@ echo "Simulação fluxo candidato — $(date -Iseconds)" \
 
 echo ""
 echo "========== 5/5  inovatech-submit =========="
+# --dir evita erro quando há mais de uma entrega_## (ou entrega legada) em ~/inovatech.
 printf '%s\n' "${COD}" "${NOME}" | (
   cd "${INV_ROOT}"
-  inovatech-submit
+  inovatech-submit --dir "${ENTREGA_DIR}"
 )
 
 echo ""
