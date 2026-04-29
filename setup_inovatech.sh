@@ -269,26 +269,38 @@ info "Diretório raiz: ${BASE_DIR}"
 inovatech_maybe_reset_lab_tree
 
 # ---------------------------------------------------------------------------
-# 0. Baixar assets do repositório (logo)
+# 0. Baixar assets do repositório (IFPI + Copa — mesmos paths em main)
 # ---------------------------------------------------------------------------
-if [ ! -f "${BASE_DIR}/logo-inovatech.png" ]; then
-  info "Baixando logo INOVATECH..."
-  if command -v curl &>/dev/null; then
-    curl -fsSL "${GITHUB_RAW}/logo-inovatech.png" \
-      -o "${BASE_DIR}/logo-inovatech.png"
-  elif command -v wget &>/dev/null; then
-    wget -q "${GITHUB_RAW}/logo-inovatech.png" \
-      -O "${BASE_DIR}/logo-inovatech.png"
-  else
-    warn "curl/wget indisponível; logo não baixado." \
-         "Frontends funcionarão sem favicon."
-  fi
-  [ -f "${BASE_DIR}/logo-inovatech.png" ] \
-    && success "Logo baixado." \
-    || warn "Falha ao baixar logo."
-else
-  info "Logo já presente em ${BASE_DIR}/logo-inovatech.png"
+FETCH=""
+if command -v curl &>/dev/null; then
+  FETCH=curl
+elif command -v wget &>/dev/null; then
+  FETCH=wget
 fi
+
+for ASSET in logo-inovatech.png logo-copa-inovatech.png \
+             logo-copa-inovatech-preto.png; do
+  if [ ! -f "${BASE_DIR}/${ASSET}" ]; then
+    info "Baixando ${ASSET}..."
+    if [ "${FETCH}" = curl ]; then
+      curl -fsSL "${GITHUB_RAW}/${ASSET}" \
+        -o "${BASE_DIR}/${ASSET}" || true
+    elif [ "${FETCH}" = wget ]; then
+      wget -q "${GITHUB_RAW}/${ASSET}" \
+        -O "${BASE_DIR}/${ASSET}" || true
+    else
+      warn "curl/wget indisponível; nenhum PNG será baixado do GitHub."
+      break
+    fi
+    if [ -f "${BASE_DIR}/${ASSET}" ]; then
+      success "${ASSET} baixado."
+    else
+      warn "Falha ao baixar ${ASSET}."
+    fi
+  else
+    info "${ASSET} já presente em ${BASE_DIR}/"
+  fi
+done
 
 # ---------------------------------------------------------------------------
 # 1. Verificar / instalar Python 3.12 e dependências do sistema
@@ -1004,7 +1016,11 @@ body {
 
 .brand-row .logo-copa {
   max-height: 76px;
+  max-width: min(100%, 360px);
   width: auto;
+  height: auto;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .exam-meta {
@@ -1504,7 +1520,11 @@ body {
 
 .brand-row .logo-copa {
   max-height: 76px;
+  max-width: min(100%, 360px);
   width: auto;
+  height: auto;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .exam-meta {
@@ -2606,6 +2626,24 @@ rsync -a --delete \
   --exclude '.DS_Store' \
   "${FRONT_SRC}/" "${ENTREGA_DIR}/${FRONT_NAME}/"
 
+# ── Logos / figurinhas na raiz do laboratório (mesmo fluxo do setup) ────
+# O rsync espelha só o frontend; PNGs da Copa costumam estar em ~/inovatech/
+# e podem faltar em public/ se não forem versionados — o --delete então remove
+# cópias antigas na entrega. Recolocamos a partir da raiz para não quebrar a UI.
+DEST_FRONT="${ENTREGA_DIR}/${FRONT_NAME}"
+mkdir -p "${DEST_FRONT}/public"
+info "Sincronizando logos INOVATECH em ${DEST_FRONT}/public/ ..."
+for brand in logo-inovatech.png logo-copa-inovatech.png logo-copa-inovatech-preto.png; do
+  if [[ -f "${INV_ROOT}/${brand}" ]]; then
+    cp "${INV_ROOT}/${brand}" "${DEST_FRONT}/public/${brand}"
+  fi
+done
+if [[ -d "${INV_ROOT}/figurinhas" ]]; then
+  mkdir -p "${DEST_FRONT}/public/assets/figurinhas"
+  cp -r "${INV_ROOT}/figurinhas/"* "${DEST_FRONT}/public/assets/figurinhas/" 2>/dev/null \
+    || true
+fi
+
 # ── Recriar .venv do backend Python ─────────────────────────────────────
 DEST_BACK="${ENTREGA_DIR}/${BACK_NAME}"
 
@@ -2663,7 +2701,6 @@ if [[ "${BACK_NAME}" == backend-django || "${BACK_NAME}" == backend-fastapi ]]; 
 fi
 
 # ── Recriar node_modules do frontend ────────────────────────────────────
-DEST_FRONT="${ENTREGA_DIR}/${FRONT_NAME}"
 info "Instalando dependências em ${DEST_FRONT}/ ..."
 cd "${DEST_FRONT}"
 
