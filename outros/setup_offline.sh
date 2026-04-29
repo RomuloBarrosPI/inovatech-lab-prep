@@ -1126,9 +1126,14 @@ function briefingHtml(): string {
     "<code>public/assets/figurinhas/</code> e referencie como ",
     "<code>/assets/figurinhas/nome.ext</code> (o edital pode citar <code>/assets/cards/</code> — ",
     "ajuste o caminho se a banca exigir exatamente essa pasta).</li>",
-    "<li>Antes de encerrar: renomeie a pasta de entrega para <code>entrega_##</code> e ",
-    "execute <code>inovatech-submit</code> no terminal.</li>",
+    "<li>No terminal, rode <code>inovatech-preparar-entrega</code>: ele copia seu backend e ",
+    "frontend para <code>entrega_##</code> e recria <code>.venv</code>/<code>node_modules</code> ",
+    "automaticamente. Desenvolva a partir daí.</li>",
+    "<li>Ao terminar, rode <code>inovatech-submit</code> para gerar o comprovante e anote o hash.</li>",
     "</ol>",
+    '<p class="briefing-note"><strong>Não copie</strong> <code>.venv</code> ou ',
+    "<code>node_modules</code> manualmente — eles contêm caminhos absolutos que quebram ",
+    "ao mover. Use sempre <code>inovatech-preparar-entrega</code>.</p>",
     '<p class="briefing-note">Critérios de avaliação (200 pts cada): backend, frontend, ',
     "requisitos de negócio, qualidade de código e README com arquitetura e ",
     "instruções de execução (Nota Técnica 02/2026).</p>",
@@ -1702,11 +1707,22 @@ function Briefing() {
           exatamente essa pasta).
         </li>
         <li>
-          Antes de encerrar: renomeie a pasta de entrega para{" "}
-          <code>entrega_##</code> e execute <code>inovatech-submit</code> no
-          terminal.
+          No terminal, rode <code>inovatech-preparar-entrega</code>: ele copia
+          seu backend e frontend para <code>entrega_##</code> e recria{" "}
+          <code>.venv</code>/<code>node_modules</code> automaticamente.
+          Desenvolva a partir daí.
+        </li>
+        <li>
+          Ao terminar, rode <code>inovatech-submit</code> para gerar o
+          comprovante e anote o hash.
         </li>
       </ol>
+      <p className="briefing-note">
+        <strong>Não copie</strong> <code>.venv</code> ou{" "}
+        <code>node_modules</code> manualmente — eles contêm caminhos absolutos
+        que quebram ao mover. Use sempre{" "}
+        <code>inovatech-preparar-entrega</code>.
+      </p>
       <p className="briefing-note">
         Critérios de avaliação (200 pts cada): backend, frontend, requisitos de
         negócio, qualidade de código e README com arquitetura e instruções de
@@ -2059,7 +2075,229 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 11. Embutir script inovatech-seal
+# 11. Embutir script inovatech-preparar-entrega
+# ---------------------------------------------------------------------------
+header "Instalando comando inovatech-preparar-entrega"
+
+PREP_BIN="/usr/local/bin/inovatech-preparar-entrega"
+
+cat > /tmp/inovatech-preparar-entrega << 'PREP_SCRIPT'
+#!/usr/bin/env bash
+# =============================================================================
+# INOVATECH – Preparar pasta de entrega
+#
+# Copia o backend e o frontend escolhidos pelo candidato para entrega_##,
+# recria .venv (Python) e node_modules (Node) para que tudo funcione
+# no novo caminho.
+# =============================================================================
+
+set -euo pipefail
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
+info()    { echo -e "${CYAN}[INFO]${RESET}  $*"; }
+success() { echo -e "${GREEN}[OK]${RESET}    $*"; }
+warn()    { echo -e "${YELLOW}[AVISO]${RESET} $*"; }
+error()   { echo -e "${RED}[ERRO]${RESET}  $*"; exit 1; }
+
+INV_ROOT="${HOME}/inovatech"
+[ -d "${INV_ROOT}" ] \
+  || error "Diretório ${INV_ROOT} não encontrado."
+
+echo ""
+echo -e "${BOLD}${CYAN}======================================${RESET}"
+echo -e "${BOLD}${CYAN}  INOVATECH – Preparar Entrega${RESET}"
+echo -e "${BOLD}${CYAN}======================================${RESET}"
+echo ""
+
+# ── Código do candidato ──────────────────────────────────────────────────
+read -rp "  Seu código PP (01 a 40): " CODIGO_PP
+CODIGO_PP=$(echo "${CODIGO_PP}" | xargs)
+[[ "${CODIGO_PP}" =~ ^[0-9]{1,2}$ ]] \
+  || error "Código PP inválido. Use um número de 01 a 40."
+CODIGO_PP=$(printf "%02d" "${CODIGO_PP}")
+
+ENTREGA_DIR="${INV_ROOT}/entrega_${CODIGO_PP}"
+
+if [ -d "${ENTREGA_DIR}" ]; then
+  warn "Pasta ${ENTREGA_DIR} já existe."
+  read -rp "  Deseja continuar e sobrescrever? (s/N): " CONFIRM
+  [[ "${CONFIRM}" =~ ^[sS]$ ]] || { info "Cancelado."; exit 0; }
+fi
+
+mkdir -p "${ENTREGA_DIR}"
+
+# ── Backend ──────────────────────────────────────────────────────────────
+echo ""
+echo -e "${BOLD}Qual backend você está usando?${RESET}"
+echo "  1) Django + DRF        (backend-django)"
+echo "  2) FastAPI + SQLModel   (backend-fastapi)"
+echo "  3) Express + TypeORM    (backend-express)"
+read -rp "  Opção (1/2/3): " BACK_OPT
+
+case "${BACK_OPT}" in
+  1) BACK_NAME="backend-django"  ;;
+  2) BACK_NAME="backend-fastapi" ;;
+  3) BACK_NAME="backend-express" ;;
+  *) error "Opção inválida." ;;
+esac
+
+BACK_SRC="${INV_ROOT}/${BACK_NAME}"
+[ -d "${BACK_SRC}" ] \
+  || error "Pasta ${BACK_SRC} não encontrada."
+
+# ── Frontend ─────────────────────────────────────────────────────────────
+echo ""
+echo -e "${BOLD}Qual frontend você está usando?${RESET}"
+echo "  1) React + TypeScript   (frontend-react)"
+echo "  2) Vanilla + TypeScript (frontend-vanilla)"
+read -rp "  Opção (1/2): " FRONT_OPT
+
+case "${FRONT_OPT}" in
+  1) FRONT_NAME="frontend-react"   ;;
+  2) FRONT_NAME="frontend-vanilla" ;;
+  *) error "Opção inválida." ;;
+esac
+
+FRONT_SRC="${INV_ROOT}/${FRONT_NAME}"
+[ -d "${FRONT_SRC}" ] \
+  || error "Pasta ${FRONT_SRC} não encontrada."
+
+# ── Copiar backend (sem .venv, __pycache__, *.db, *.sqlite3) ────────────
+echo ""
+info "Copiando ${BACK_NAME} → ${ENTREGA_DIR}/${BACK_NAME}/"
+rsync -a --delete \
+  --exclude '.venv' \
+  --exclude '__pycache__' \
+  --exclude '*.pyc' \
+  --exclude '*.pyo' \
+  --exclude '*.sqlite3' \
+  --exclude '*.db' \
+  --exclude 'node_modules' \
+  --exclude '.DS_Store' \
+  "${BACK_SRC}/" "${ENTREGA_DIR}/${BACK_NAME}/"
+
+# ── Copiar frontend (sem node_modules, dist) ────────────────────────────
+info "Copiando ${FRONT_NAME} → ${ENTREGA_DIR}/${FRONT_NAME}/"
+rsync -a --delete \
+  --exclude 'node_modules' \
+  --exclude 'dist' \
+  --exclude '.DS_Store' \
+  "${FRONT_SRC}/" "${ENTREGA_DIR}/${FRONT_NAME}/"
+
+# ── Recriar .venv do backend Python ─────────────────────────────────────
+DEST_BACK="${ENTREGA_DIR}/${BACK_NAME}"
+
+if [[ "${BACK_NAME}" == backend-django || "${BACK_NAME}" == backend-fastapi ]]; then
+  info "Recriando .venv em ${DEST_BACK}/ ..."
+
+  PYTHON312=""
+  for p in python3.12 python3; do
+    if command -v "$p" &>/dev/null; then
+      PYTHON312="$p"; break
+    fi
+  done
+  [ -n "${PYTHON312}" ] || error "Python 3.12 não encontrado no PATH."
+
+  UV=""
+  if command -v uv &>/dev/null; then
+    UV=$(command -v uv)
+  fi
+
+  if [ -n "${UV}" ]; then
+    "${UV}" venv "${DEST_BACK}/.venv" --python "${PYTHON312}" --quiet
+
+    if [ -f "${BACK_SRC}/requirements.txt" ]; then
+      "${UV}" pip install \
+        --python "${DEST_BACK}/.venv/bin/python" \
+        -r "${BACK_SRC}/requirements.txt" --quiet
+    else
+      OLD_REQS=$("${BACK_SRC}/.venv/bin/pip" freeze 2>/dev/null || true)
+      if [ -n "${OLD_REQS}" ]; then
+        echo "${OLD_REQS}" | "${UV}" pip install \
+          --python "${DEST_BACK}/.venv/bin/python" \
+          -r /dev/stdin --quiet
+      else
+        warn "Sem requirements.txt e sem .venv original — .venv vazio."
+        warn "Instale os pacotes manualmente: cd ${DEST_BACK} && source .venv/bin/activate && pip install ..."
+      fi
+    fi
+    success ".venv recriado com $(${DEST_BACK}/.venv/bin/python --version)"
+  else
+    warn "uv não encontrado — criando .venv com venv padrão..."
+    "${PYTHON312}" -m venv "${DEST_BACK}/.venv"
+
+    if [ -f "${BACK_SRC}/requirements.txt" ]; then
+      "${DEST_BACK}/.venv/bin/pip" install -q \
+        -r "${BACK_SRC}/requirements.txt"
+    else
+      OLD_REQS=$("${BACK_SRC}/.venv/bin/pip" freeze 2>/dev/null || true)
+      if [ -n "${OLD_REQS}" ]; then
+        echo "${OLD_REQS}" | "${DEST_BACK}/.venv/bin/pip" install -q \
+          -r /dev/stdin
+      fi
+    fi
+    success ".venv recriado (sem uv, pode ter sido mais lento)."
+  fi
+fi
+
+# ── Recriar node_modules do frontend ────────────────────────────────────
+DEST_FRONT="${ENTREGA_DIR}/${FRONT_NAME}"
+info "Instalando dependências em ${DEST_FRONT}/ ..."
+cd "${DEST_FRONT}"
+
+export NVM_DIR="${HOME}/.nvm"
+# shellcheck disable=SC1091
+[ -s "${NVM_DIR}/nvm.sh" ] && . "${NVM_DIR}/nvm.sh"
+nvm use 2>/dev/null || true
+
+npm install --quiet 2>/dev/null
+success "node_modules instalado."
+
+# ── Recriar node_modules do backend Express (se for o caso) ─────────────
+if [[ "${BACK_NAME}" == "backend-express" ]]; then
+  info "Instalando dependências do Express em ${DEST_BACK}/ ..."
+  cd "${DEST_BACK}"
+  npm install --quiet 2>/dev/null
+  success "node_modules do Express instalado."
+fi
+
+# ── Resumo ───────────────────────────────────────────────────────────────
+echo ""
+echo -e "${BOLD}${GREEN}======================================${RESET}"
+echo -e "${BOLD}${GREEN}  Entrega preparada com sucesso!${RESET}"
+echo -e "${BOLD}${GREEN}======================================${RESET}"
+echo ""
+echo -e "  Pasta   : ${BOLD}${ENTREGA_DIR}${RESET}"
+echo -e "  Backend : ${BOLD}${BACK_NAME}${RESET}"
+echo -e "  Frontend: ${BOLD}${FRONT_NAME}${RESET}"
+echo ""
+echo -e "  Continue desenvolvendo dentro de ${BOLD}${ENTREGA_DIR}${RESET}."
+echo -e "  Ao finalizar, rode: ${BOLD}inovatech-submit${RESET}"
+echo ""
+info "Dica: se precisar rodar o backend Python:"
+echo "    cd ${DEST_BACK} && source .venv/bin/activate"
+echo ""
+info "Dica: se precisar rodar o frontend:"
+echo "    cd ${DEST_FRONT} && npm run dev"
+echo ""
+PREP_SCRIPT
+
+if [ "$(id -u)" -eq 0 ]; then
+  cp /tmp/inovatech-preparar-entrega "${PREP_BIN}"
+  chmod +x "${PREP_BIN}"
+  success "Comando instalado: ${PREP_BIN}"
+else
+  warn "Setup não está rodando como root — tentando sudo..."
+  sudo cp /tmp/inovatech-preparar-entrega "${PREP_BIN}" \
+    && sudo chmod +x "${PREP_BIN}" \
+    && success "Comando instalado: ${PREP_BIN}" \
+    || warn "Não foi possível instalar em /usr/local/bin; use" \
+" /tmp/inovatech-preparar-entrega (caminho completo)."
+fi
+
+# ---------------------------------------------------------------------------
+# 12. Embutir script inovatech-seal
 # ---------------------------------------------------------------------------
 header "Instalando comando inovatech-seal"
 
@@ -2614,6 +2852,7 @@ echo -e "${BOLD}Comandos (execute no terminal, em ${BASE_DIR}):${RESET}"
 echo ""
 echo -e "  ${GREEN}✔${RESET}  ${BOLD}inovatech-verify${RESET}    → candidato confere hash de integridade"
 echo -e "  ${GREEN}✔${RESET}  ${BOLD}inovatech-versions${RESET}  → confere versões do ambiente (candidato)"
+echo -e "  ${GREEN}✔${RESET}  ${BOLD}inovatech-preparar-entrega${RESET} → copia stack para entrega_## e recria ambientes"
 echo -e "  ${GREEN}✔${RESET}  ${BOLD}inovatech-submit${RESET}    → gera comprovante (candidato)"
 echo -e "  ${GREEN}✔${RESET}  ${BOLD}inovatech-seal${RESET}      → selagem única (coordenação); binário" \
 " é removido após uso"
@@ -2644,11 +2883,14 @@ echo ""
 echo -e "  ${CYAN}2. Candidato${RESET} pode rodar: ${BOLD}inovatech-versions${RESET} p/ checar" \
 " dependências (opcional, antes ou durante a prova)."
 echo ""
-echo -e "  ${CYAN}3. Candidatos${RESET} desenvolvem em entrega (renomeada na prova"
-echo "     para entrega_##, 01 a 40, nota técnica). inovatech-submit ajusta a"
-echo "     pasta sozinho se houver uma só; senão, inovatech-submit --dir …/entrega_##"
+echo -e "  ${CYAN}3. Candidato${RESET} roda ${BOLD}inovatech-preparar-entrega${RESET} — escolhe backend"
+echo "     e frontend, informa código PP. O comando copia a stack para"
+echo "     entrega_## e recria .venv/node_modules automaticamente."
 echo ""
-echo -e "  ${CYAN}4. Ao encerrar${RESET}, cada candidato: ${BOLD}inovatech-submit${RESET}, informa" \
+echo -e "  ${CYAN}4. Candidato${RESET} desenvolve dentro de ${BOLD}entrega_##/${RESET}."
+echo "     Tudo funciona normalmente (caminhos relativos, servers, etc.)."
+echo ""
+echo -e "  ${CYAN}5. Ao encerrar${RESET}, cada candidato: ${BOLD}inovatech-submit${RESET}, informa" \
 " nome e código PP, e anota o hash."
 echo ""
 success "Setup INOVATECH finalizado — ${SETUP_DATE}"

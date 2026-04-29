@@ -15,6 +15,15 @@
 # NOTA: não são criados atalhos no desktop. Comandos (hash, versões) via
 #       terminal, com cwd em ~/inovatech, conforme instrução da prova.
 #
+# Reexecução no laboratório (coordenação):
+#   Ao rodar este script de novo na mesma pasta (ex.: ~/inovatech) que já foi
+#   configurada, o setup detecta instalação anterior e APAGA .seal/, as pastas
+#   dos cinco projetos base, entrega/ e entrega_##/, depois recria tudo — assim
+#   a árvore acompanha a versão atual do script e inovatech-seal volta a ser
+#   instalado em /usr/local/bin (selagens antigas são descartadas).
+#   Para forçar esse reset: INOVATECH_LAB_RESET=1 bash setup_inovatech.sh
+#   Para evitar o reset (ex.: desenvolvimento): INOVATECH_SKIP_LAB_RESET=1
+#
 # Execução via pipe (curl … | bash):
 #   Toda a lógica que altera o sistema fica em run_inovatech_setup, definida
 #   antes e chamada só ao final. Se o download do script for interrompido,
@@ -35,6 +44,64 @@ success() { echo -e "${GREEN}[OK]${RESET}    $*"; }
 warn()    { echo -e "${YELLOW}[AVISO]${RESET} $*"; }
 error()   { echo -e "${RED}[ERRO]${RESET}  $*"; exit 1; }
 header()  { echo -e "\n${BOLD}${CYAN}=== $* ===${RESET}\n"; }
+
+# Zera selagem, entregas e projetos base quando o assessor reexecuta o setup
+# no mesmo diretório — BASE_DIR deve estar definido (run_inovatech_setup).
+inovatech_maybe_reset_lab_tree() {
+  if [ "${INOVATECH_SKIP_LAB_RESET:-}" = "1" ]; then
+    info "INOVATECH_SKIP_LAB_RESET=1 — sem reset; árvore existente mantida."
+    return 0
+  fi
+
+  local do_reset="0"
+  if [ "${INOVATECH_LAB_RESET:-}" = "1" ]; then
+    do_reset="1"
+  elif [ -d "${BASE_DIR}/.seal" ]; then
+    do_reset="1"
+  elif [ -f "${BASE_DIR}/.nvmrc" ] \
+    && [ -d "${BASE_DIR}/backend-django" ] \
+    && [ -f "${BASE_DIR}/backend-django/manage.py" ]; then
+    do_reset="1"
+  fi
+
+  if [ "${do_reset}" != "1" ]; then
+    return 0
+  fi
+
+  header "Reset do laboratório (atualização / nova sessão)"
+  warn "Instalação anterior detectada: removendo .seal/, entrega(s) e" \
+       " projetos base para recriação conforme este script."
+
+  if [ -d "${BASE_DIR}/.seal" ]; then
+    rm -rf "${BASE_DIR}/.seal"
+    success "Removida pasta .seal/ (selagens anteriores)."
+  fi
+
+  local proj
+  for proj in backend-django backend-fastapi backend-express \
+              frontend-vanilla frontend-react; do
+    if [ -e "${BASE_DIR}/${proj}" ]; then
+      rm -rf "${BASE_DIR:?}/${proj}"
+      success "Removido ${proj}/"
+    fi
+  done
+
+  if [ -d "${BASE_DIR}/entrega" ]; then
+    rm -rf "${BASE_DIR}/entrega"
+    success "Removido entrega/"
+  fi
+
+  local ed
+  shopt -s nullglob
+  for ed in "${BASE_DIR}"/entrega_[0-9][0-9]; do
+    [ -d "${ed}" ] || continue
+    rm -rf "${ed}"
+    success "Removido $(basename "${ed}")/"
+  done
+  shopt -u nullglob
+
+  success "Reset concluído; recriando ambiente a seguir."
+}
 
 SETUP_DATE="2026-04-21"
 # Intérprete do lab: sempre 3.12 (PATH); nunca python/python3 genéricos.
@@ -182,6 +249,8 @@ BASE_DIR="$(pwd)"
 
 header "INOVATECH – Setup dos Projetos Base (versões fixas de ${SETUP_DATE})"
 info "Diretório raiz: ${BASE_DIR}"
+
+inovatech_maybe_reset_lab_tree
 
 # ---------------------------------------------------------------------------
 # 0. Baixar assets do repositório (logo)
