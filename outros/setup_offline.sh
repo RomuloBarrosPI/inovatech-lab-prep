@@ -582,6 +582,10 @@ else
   warn "FastAPI já existe, pulando inicialização."
 fi
 
+info "Gerando backend-fastapi/requirements.txt a partir do .venv ..."
+"${FASTAPI_DIR}/.venv/bin/pip" freeze > "${FASTAPI_DIR}/requirements.txt"
+success "requirements.txt do FastAPI atualizado."
+
 # ---------------------------------------------------------------------------
 # 6. Backend 3 – Express + TypeORM
 # ---------------------------------------------------------------------------
@@ -1153,7 +1157,7 @@ function headerHtml(): string {
     '<div class="brand-row">',
     '<img class="logo-ifpi" src="/logo-inovatech.png"',
     ' alt="Programa Residência em Inovação Tecnológica GAB IFPI" />',
-    '<img class="logo-copa" src="/logo-copa-inovatech.png"',
+    '<img class="logo-copa" src="/logo-copa-inovatech-preto.png"',
     ' alt="Copa do Mundo InovaTech 2026 — identidade fictícia" />',
     "</div>",
     '<p class="exam-meta">',
@@ -1170,7 +1174,7 @@ function headerHtml(): string {
 function footerHtml(): string {
   const parts = [
     '<footer class="footer-copa">',
-    '<img src="/logo-copa-inovatech-preto.png" ',
+    '<img src="/logo-copa-inovatech.png" ',
     'alt="Copa do Mundo InovaTech — variante para fundo escuro" />',
     '<p class="footer-caption">Logo fictício — variante para fundos escuros.</p>',
     "</footer>",
@@ -1798,7 +1802,7 @@ export default function App() {
           />
           <img
             className="logo-copa"
-            src="/logo-copa-inovatech.png"
+            src="/logo-copa-inovatech-preto.png"
             alt="Copa do Mundo InovaTech 2026 — identidade fictícia"
           />
         </div>
@@ -1827,7 +1831,7 @@ export default function App() {
       </section>
       <footer className="footer-copa">
         <img
-          src="/logo-copa-inovatech-preto.png"
+          src="/logo-copa-inovatech.png"
           alt="Copa do Mundo InovaTech — variante para fundo escuro"
         />
         <p className="footer-caption">
@@ -2244,6 +2248,16 @@ if [[ "${BACK_NAME}" == backend-django || "${BACK_NAME}" == backend-fastapi ]]; 
         echo "${OLD_REQS}" | "${UV}" pip install \
           --python "${DEST_BACK}/.venv/bin/python" \
           -r /dev/stdin --quiet
+      elif [[ "${BACK_NAME}" == "backend-fastapi" ]]; then
+        warn "Sem requirements.txt no projeto-base — instalando pinagens oficiais INOVATECH (FastAPI)."
+        "${UV}" pip install --python "${DEST_BACK}/.venv/bin/python" \
+          "fastapi==0.136.0" "uvicorn==0.45.0" "starlette==1.0.0" \
+          "sqlmodel==0.0.38" "alembic==1.18.4" "SQLAlchemy==2.0.49" \
+          "Mako==1.3.11" "pyjwt==2.9.0" "python-jose[cryptography]==3.5.0" \
+          "passlib==1.7.4" "bcrypt==3.2.2" "python-multipart==0.0.26" \
+          "email-validator==2.3.0" "httpx==0.28.1" "anyio==4.13.0" \
+          "pydantic==2.13.3" "pydantic-settings==2.14.0" \
+          "annotated-types==0.7.0" --quiet
       else
         warn "Sem requirements.txt e sem .venv original — .venv vazio."
         warn "Instale os pacotes manualmente: cd ${DEST_BACK} && source .venv/bin/activate && pip install ..."
@@ -2262,6 +2276,16 @@ if [[ "${BACK_NAME}" == backend-django || "${BACK_NAME}" == backend-fastapi ]]; 
       if [ -n "${OLD_REQS}" ]; then
         echo "${OLD_REQS}" | "${DEST_BACK}/.venv/bin/pip" install -q \
           -r /dev/stdin
+      elif [[ "${BACK_NAME}" == "backend-fastapi" ]]; then
+        warn "Sem requirements.txt no projeto-base — instalando pinagens oficiais INOVATECH (FastAPI)."
+        "${DEST_BACK}/.venv/bin/pip" install -q \
+          "fastapi==0.136.0" "uvicorn==0.45.0" "starlette==1.0.0" \
+          "sqlmodel==0.0.38" "alembic==1.18.4" "SQLAlchemy==2.0.49" \
+          "Mako==1.3.11" "pyjwt==2.9.0" "python-jose[cryptography]==3.5.0" \
+          "passlib==1.7.4" "bcrypt==3.2.2" "python-multipart==0.0.26" \
+          "email-validator==2.3.0" "httpx==0.28.1" "anyio==4.13.0" \
+          "pydantic==2.13.3" "pydantic-settings==2.14.0" \
+          "annotated-types==0.7.0"
       fi
     fi
     success ".venv recriado (sem uv, pode ter sido mais lento)."
@@ -2301,8 +2325,19 @@ echo ""
 echo -e "  Continue desenvolvendo dentro de ${BOLD}${ENTREGA_DIR}${RESET}."
 echo -e "  Ao finalizar, rode: ${BOLD}inovatech-submit${RESET}"
 echo ""
-info "Dica: se precisar rodar o backend Python:"
-echo "    cd ${DEST_BACK} && source .venv/bin/activate"
+if [[ "${BACK_NAME}" == "backend-fastapi" ]]; then
+  info "Dica: se precisar rodar o backend FastAPI (usa o Python do .venv):"
+  echo "    cd ${DEST_BACK} && .venv/bin/python -m uvicorn main:app --reload"
+elif [[ "${BACK_NAME}" == "backend-django" ]]; then
+  info "Dica: se precisar rodar o backend Django:"
+  echo "    cd ${DEST_BACK} && .venv/bin/python manage.py runserver"
+elif [[ "${BACK_NAME}" == "backend-express" ]]; then
+  info "Dica: se precisar rodar o backend Express:"
+  echo "    cd ${DEST_BACK} && npm run dev"
+else
+  info "Dica: se precisar rodar o backend Python:"
+  echo "    cd ${DEST_BACK} && source .venv/bin/activate"
+fi
 echo ""
 info "Dica: se precisar rodar o frontend:"
 echo "    cd ${DEST_FRONT} && npm run dev"
@@ -2888,8 +2923,7 @@ echo ""
 echo -e "  ${CYAN}Django :${RESET}  cd backend-django && source .venv/bin/activate"
 echo "            python manage.py migrate && python manage.py runserver"
 echo ""
-echo -e "  ${CYAN}FastAPI:${RESET}  cd backend-fastapi && source .venv/bin/activate"
-echo "            uvicorn main:app --reload"
+echo -e "  ${CYAN}FastAPI:${RESET}  cd backend-fastapi && .venv/bin/python -m uvicorn main:app --reload"
 echo ""
 echo -e "  ${CYAN}Express:${RESET}  cd backend-express && npm run dev"
 echo ""
