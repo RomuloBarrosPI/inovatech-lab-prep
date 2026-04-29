@@ -3108,6 +3108,9 @@ cat > /tmp/inovatech-versions << 'VERSIONS_SCRIPT'
 # INOVATECH – pacotes principais (leitura do ambiente em ~/inovatech)
 # Sem set -e: o relatório deve listar tudo mesmo se pip estiver indisponível
 # no venv (ex.: certos venvs uv) ou se um pip show falhar.
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+RESET='\033[0m'
 set -uo pipefail
 
 BASE_DIR="${1:-$(pwd)}"
