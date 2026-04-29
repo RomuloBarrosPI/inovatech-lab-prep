@@ -583,7 +583,8 @@ else
 fi
 
 info "Gerando backend-fastapi/requirements.txt a partir do .venv ..."
-"${FASTAPI_DIR}/.venv/bin/pip" freeze > "${FASTAPI_DIR}/requirements.txt"
+"${FASTAPI_DIR}/.venv/bin/python" -m pip freeze \
+  > "${FASTAPI_DIR}/requirements.txt"
 success "requirements.txt do FastAPI atualizado."
 
 # ---------------------------------------------------------------------------
@@ -2243,7 +2244,8 @@ if [[ "${BACK_NAME}" == backend-django || "${BACK_NAME}" == backend-fastapi ]]; 
         --python "${DEST_BACK}/.venv/bin/python" \
         -r "${BACK_SRC}/requirements.txt" --quiet
     else
-      OLD_REQS=$("${BACK_SRC}/.venv/bin/pip" freeze 2>/dev/null || true)
+      OLD_REQS=$("${UV}" pip freeze \
+        --python "${BACK_SRC}/.venv/bin/python" 2>/dev/null || true)
       if [ -n "${OLD_REQS}" ]; then
         echo "${OLD_REQS}" | "${UV}" pip install \
           --python "${DEST_BACK}/.venv/bin/python" \
