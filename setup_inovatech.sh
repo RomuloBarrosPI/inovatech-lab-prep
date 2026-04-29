@@ -255,6 +255,17 @@ info "Python  : ${PYTHON_VERSION} (${PYTHON312})"
 "$PYTHON312" -c "import sys; sys.exit(0 if sys.version_info[:2] == (3, 12) else 1)" \
   || error "Python 3.12.x é obrigatório. Encontrado: ${PYTHON_VERSION}"
 
+# zip(1): usado por inovatech-enviar-entrega (comissão, empacotar pasta de entrega)
+if ! command -v zip &>/dev/null; then
+  info "Instalando pacote zip..."
+  if [ "$(id -u)" -ne 0 ]; then
+    sudo apt-get update -qq && sudo apt-get install -y -qq zip
+  else
+    apt-get update -qq && apt-get install -y -qq zip
+  fi
+fi
+command -v zip &>/dev/null || error "Comando zip necessário para inovatech-enviar-entrega."
+
 # ---------------------------------------------------------------------------
 # 2. Instalar uv se não disponível (logo após validar Python 3.12; não
 #    depende de Node/nvm — evita esperar download do Node antes dos venvs)
@@ -1173,9 +1184,14 @@ function briefingHtml(): string {
     "<code>public/assets/figurinhas/</code> e referencie como ",
     "<code>/assets/figurinhas/nome.ext</code> (o edital pode citar <code>/assets/cards/</code> — ",
     "ajuste o caminho se a banca exigir exatamente essa pasta).</li>",
-    "<li>Antes de encerrar: renomeie a pasta de entrega para <code>entrega_##</code> e ",
-    "execute <code>inovatech-submit</code> no terminal.</li>",
+    "<li>No terminal, rode <code>inovatech-preparar-entrega</code>: ele copia seu backend e ",
+    "frontend para <code>entrega_##</code> e recria <code>.venv</code>/<code>node_modules</code> ",
+    "automaticamente. Desenvolva a partir daí.</li>",
+    "<li>Ao terminar, rode <code>inovatech-submit</code> para gerar o comprovante e anote o hash.</li>",
     "</ol>",
+    '<p class="briefing-note"><strong>Não copie</strong> <code>.venv</code> ou ',
+    "<code>node_modules</code> manualmente — eles contêm caminhos absolutos que quebram ",
+    "ao mover. Use sempre <code>inovatech-preparar-entrega</code>.</p>",
     '<p class="briefing-note">Critérios de avaliação (200 pts cada): backend, frontend, ',
     "requisitos de negócio, qualidade de código e README com arquitetura e ",
     "instruções de execução (Nota Técnica 02/2026).</p>",
@@ -1703,11 +1719,22 @@ function Briefing() {
           exatamente essa pasta).
         </li>
         <li>
-          Antes de encerrar: renomeie a pasta de entrega para{" "}
-          <code>entrega_##</code> e execute <code>inovatech-submit</code> no
-          terminal.
+          No terminal, rode <code>inovatech-preparar-entrega</code>: ele copia
+          seu backend e frontend para <code>entrega_##</code> e recria{" "}
+          <code>.venv</code>/<code>node_modules</code> automaticamente.
+          Desenvolva a partir daí.
+        </li>
+        <li>
+          Ao terminar, rode <code>inovatech-submit</code> para gerar o
+          comprovante e anote o hash.
         </li>
       </ol>
+      <p className="briefing-note">
+        <strong>Não copie</strong> <code>.venv</code> ou{" "}
+        <code>node_modules</code> manualmente — eles contêm caminhos absolutos
+        que quebram ao mover. Use sempre{" "}
+        <code>inovatech-preparar-entrega</code>.
+      </p>
       <p className="briefing-note">
         Critérios de avaliação (200 pts cada): backend, frontend, requisitos de
         negócio, qualidade de código e README com arquitetura e instruções de
@@ -1891,6 +1918,17 @@ sha256() {
   fi
 }
 
+inovatech_ascii_banner() {
+  cat << 'INVASCII'
+██╗███╗   ██╗ ██████╗ ██╗   ██╗ █████╗ ████████╗███████╗ ██████╗██╗  ██╗
+██║████╗  ██║██╔═══██╗██║   ██║██╔══██╗╚══██╔══╝██╔════╝██╔════╝██║  ██║
+██║██╔██╗ ██║██║   ██║██║   ██║███████║   ██║   █████╗  ██║     ███████║
+██║██║╚██╗██║██║   ██║╚██╗ ██╔╝██╔══██║   ██║   ██╔══╝  ██║     ██╔══██║
+██║██║ ╚████║╚██████╔╝ ╚████╔╝ ██║  ██║   ██║   ███████╗╚██████╗██║  ██║
+╚═╝╚═╝  ╚═══╝ ╚═════╝   ╚═══╝  ╚═╝  ╚═╝   ╚═╝   ╚══════╝ ╚═════╝╚═╝  ╚═╝
+INVASCII
+}
+
 # --dir: caminho explícito. Caso contrário, detecção em ~/inovatech/ (ver
 # comentário no cabeçalho deste script).
 ENTREGA_DIR=""
@@ -1940,6 +1978,9 @@ TIMESTAMP=$(date '+%Y-%m-%dT%H:%M:%S')
 DATESTAMP=$(date '+%Y%m%d_%H%M%S')
 mkdir -p "${COMPROVANTE_DIR}"
 
+echo ""
+inovatech_ascii_banner
+echo ""
 header "INOVATECH – Geração de Comprovante de Entrega"
 
 echo -e "${BOLD}Informe seus dados para o comprovante:${RESET}"
@@ -2075,7 +2116,522 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 11. Embutir script inovatech-seal
+# 10b. Embutir script inovatech-enviar-entrega (comissão, pós-prova / API HTTPS)
+# ---------------------------------------------------------------------------
+header "Instalando comando inovatech-enviar-entrega"
+
+ENVIAR_BIN="/usr/local/bin/inovatech-enviar-entrega"
+
+cat > /tmp/inovatech-enviar-entrega << 'ENVIAR_SCRIPT'
+#!/usr/bin/env bash
+# =============================================================================
+# INOVATECH – Enviar entrega por HTTPS (multipart) — COMISSÃO, pós-prova
+#
+# Modalidade laboratório: nome_candidato + codigo_posicao (+ edicao_pk se
+# necessário). Modalidade token: --token (Bearer). Ver ENTREGA-PROVA-PRATICA-API.
+#
+# Config opcional: /etc/inovatech/entrega.env (export INOVATECH_*)
+# =============================================================================
+
+set -euo pipefail
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
+info()    { echo -e "${CYAN}[INFO]${RESET}  $*"; }
+success() { echo -e "${GREEN}[OK]${RESET}    $*"; }
+warn()    { echo -e "${YELLOW}[AVISO]${RESET} $*"; }
+error()   { echo -e "${RED}[ERRO]${RESET}  $*"; exit 1; }
+
+if [[ -r /etc/inovatech/entrega.env ]]; then
+  # shellcheck source=/dev/null
+  source /etc/inovatech/entrega.env
+fi
+
+DEFAULT_URL="https://inovatech.ifpi.edu.br/api/entrega-prova-pratica/"
+MAX_BYTES=$((80 * 1024 * 1024))
+
+ENTREGA_DIR=""
+URL="${INOVATECH_ENTREGA_URL:-$DEFAULT_URL}"
+SECRET="${INOVATECH_ENTREGA_SECRET:-}"
+EDICAO_PK="${INOVATECH_EDICAO_PK:-}"
+NOME=""
+CODIGO=""
+TOKEN=""
+SEM_COMPROVANTE=0
+FORCE=0
+INV_ROOT="${INOVATECH_ROOT:-${HOME}/inovatech}"
+
+usage() {
+  sed -n '1,80p' << 'USAGE'
+Uso: inovatech-enviar-entrega [opções]
+
+  Comissão: após liberar a internet, envia a pasta de entrega (ZIP) à API.
+
+Modo laboratório (padrão):
+  --nome "nome do candidato"
+  --codigo N   (posição na classificação geral, 01–40 típ.)
+  --edicao-pk N   (se o servidor não tiver PROVA_PRATICA_ENTREGA_EDICAO_PK)
+
+Modo token:
+  --token BEARER   (não usa --nome / --codigo)
+
+Geral:
+  --dir /caminho/entrega_##   (senão: deteta em $INOVATECH_ROOT ou ~/inovatech)
+  --url URL          (padrão: produção inovatech.ifpi.edu.br)
+  --secret VALOR     → cabeçalho X-Entrega-Prova-Pratica-Secret
+  --sem-comprovante  exclui .comprovante/ do ZIP (alinha ao manifesto hasheado)
+  --force            envia mesmo se ZIP > 80 MiB
+
+Variáveis de ambiente: INOVATECH_ENTREGA_URL, INOVATECH_ENTREGA_SECRET,
+  INOVATECH_EDICAO_PK, INOVATECH_ROOT
+
+Arquivo opcional: /etc/inovatech/entrega.env
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dir)            ENTREGA_DIR="$2"; shift 2 ;;
+    --url)            URL="$2"; shift 2 ;;
+    --secret)         SECRET="$2"; shift 2 ;;
+    --edicao-pk)      EDICAO_PK="$2"; shift 2 ;;
+    --nome)           NOME="$2"; shift 2 ;;
+    --codigo)         CODIGO="$2"; shift 2 ;;
+    --token)          TOKEN="$2"; shift 2 ;;
+    --sem-comprovante) SEM_COMPROVANTE=1; shift ;;
+    --force)          FORCE=1; shift ;;
+    -h|--help)        usage; exit 0 ;;
+    *) error "Opção desconhecida: $1 (use --help)" ;;
+  esac
+done
+
+command -v curl &>/dev/null || error "curl não encontrado."
+command -v zip &>/dev/null || error "Comando 'zip' não encontrado. Instale: sudo apt install zip"
+
+# ---- Detetar pasta de entrega (igual inovatech-submit, base INOVATECH_ROOT) ----
+if [[ -z "${ENTREGA_DIR}" ]]; then
+  cands=()
+  if [[ -d "${INV_ROOT}/entrega" ]]; then
+    cands+=("${INV_ROOT}/entrega")
+  fi
+  shopt -s nullglob
+  for d in "${INV_ROOT}"/entrega_[0-9][0-9]; do
+    [[ -d "$d" ]] || continue
+    bname=$(basename "$d")
+    code=${bname#entrega_}
+    if [[ "${code}" =~ ^(0[1-9]|[1-3][0-9]|40)$ ]]; then
+      cands+=("$d")
+    fi
+  done
+  shopt -u nullglob
+  nc=${#cands[@]}
+  if [[ "${nc}" -eq 0 ]]; then
+    error "Pasta de entrega não encontrada em ${INV_ROOT}. Use" \
+          " --dir /caminho ou defina/há entrega_##"
+  elif [[ "${nc}" -gt 1 ]]; then
+    error "Várias pastas de entrega em ${INV_ROOT}. Especifique:" \
+          " inovatech-enviar-entrega --dir /caminho"
+  else
+    ENTREGA_DIR="${cands[0]}"
+  fi
+fi
+
+[[ -d "${ENTREGA_DIR}" ]] || error "Pasta não encontrada: ${ENTREGA_DIR}"
+ENTREGA_ABS="$(cd "${ENTREGA_DIR}" && pwd)"
+
+# ---- Modo token vs laboratório + prompts se faltar ----
+LAB=1
+if [[ -n "${TOKEN}" ]]; then
+  LAB=0
+elif [[ -z "${NOME}" || -z "${CODIGO}" ]]; then
+  echo -e "${BOLD}Identificação (modo laboratório)${RESET}"
+  [[ -z "${NOME}" ]] && read -rp "  nome_candidato: " NOME
+  [[ -z "${CODIGO}" ]] && read -rp "  codigo_posicao (01–40 típ.): " CODIGO
+fi
+
+if [[ "${LAB}" -eq 1 ]]; then
+  [[ -n "${NOME// }" ]] || error "nome_candidato é obrigatório."
+  [[ -n "${CODIGO// }" ]] || error "codigo_posicao é obrigatório."
+  # Normalização leve para nome do arquivo
+  CODIGO_TR=$(echo "${CODIGO}" | xargs)
+  if [[ "${CODIGO_TR}" =~ ^[0-9]+$ ]]; then
+    CODZIP=$(printf '%02d' "$((10#${CODIGO_TR}))")
+  else
+    CODZIP="XX"
+  fi
+else
+  CODZIP=""
+fi
+
+DATESTAMP=$(date '+%Y%m%d_%H%M%S')
+TMPZIP="$(mktemp /tmp/inovatech_entrega_XXXXXX.zip)"
+BODY="$(mktemp)"
+trap 'rm -f "${TMPZIP}" "${BODY}" 2>/dev/null' EXIT
+
+echo ""
+echo -e "${BOLD}${CYAN}INOVATECH – Envio HTTPS (comissão – pós-prova)${RESET}"
+echo ""
+
+info "Empacotando: ${ENTREGA_ABS}"
+
+build_zip() {
+  if [[ "${SEM_COMPROVANTE}" -eq 1 ]]; then
+    (
+      cd "${ENTREGA_ABS}" || exit 1
+      find . -type f \
+        ! -path '*/.venv/*' \
+        ! -path '*/node_modules/*' \
+        ! -path '*/__pycache__/*' \
+        ! -path '*/.git/*' \
+        ! -name '*.pyc' \
+        ! -name '*.pyo' \
+        ! -path '*/dist/*' \
+        ! -path '*/.comprovante/*' \
+        ! -name '*.log' \
+        ! -name '.DS_Store' \
+        ! -name '*.sqlite3' \
+        ! -name '*.db' \
+        ! -name 'package-lock.json' \
+        | LC_ALL=C sort \
+        | zip -q "${TMPZIP}" -@
+    )
+  else
+    (
+      cd "${ENTREGA_ABS}" || exit 1
+      find . -type f \
+        ! -path '*/.venv/*' \
+        ! -path '*/node_modules/*' \
+        ! -path '*/__pycache__/*' \
+        ! -path '*/.git/*' \
+        ! -name '*.pyc' \
+        ! -name '*.pyo' \
+        ! -path '*/dist/*' \
+        ! -name '*.log' \
+        ! -name '.DS_Store' \
+        ! -name '*.sqlite3' \
+        ! -name '*.db' \
+        ! -name 'package-lock.json' \
+        | LC_ALL=C sort \
+        | zip -q "${TMPZIP}" -@
+    )
+  fi
+}
+
+build_zip
+
+ZS=$(stat -c%s "${TMPZIP}" 2>/dev/null || stat -f%z "${TMPZIP}" 2>/dev/null || echo 0)
+if [[ "${ZS}" -eq 0 ]]; then
+  error "ZIP vazio — nenhum ficheiro após filtros?"
+fi
+
+if [[ "${ZS}" -gt "${MAX_BYTES}" ]] && [[ "${FORCE}" -eq 0 ]]; then
+  error "ZIP com ${ZS} bytes excede 80 MiB. Reduza a pasta ou use --force" \
+        " (ou confirme Nginx/backend)."
+fi
+if [[ "${ZS}" -gt "${MAX_BYTES}" ]]; then
+  warn "ZIP > 80 MiB — envio pode falhar com 413."
+fi
+
+read_sig=$(head -c 2 "${TMPZIP}" || true)
+if [[ "${read_sig}" != $'PK' ]]; then
+  error "Ficheiro gerado não parece ZIP (assinatura PK ausente)."
+fi
+
+ZIPNAME="inovatech_entrega_${CODZIP:-na}_${DATESTAMP}.zip"
+info "ZIP: ${ZS} bytes → ${ZIPNAME}"
+
+if [[ "${LAB}" -eq 1 ]]; then
+  NOME="$(echo "${NOME}" | xargs)"
+  CODIGO="$(echo "${CODIGO}" | xargs)"
+fi
+
+# ---- CURL ----
+HEADER_ARGS=()
+if [[ -n "${SECRET}" ]]; then
+  HEADER_ARGS+=( -H "X-Entrega-Prova-Pratica-Secret: ${SECRET}" )
+fi
+
+MULTI=( -sS \
+  --max-time 600 \
+  --retry 3 \
+  --retry-all-errors )
+
+if [[ "${LAB}" -eq 1 ]]; then
+  MULTI+=(
+    -F "nome_candidato=${NOME}"
+    -F "codigo_posicao=${CODIGO}"
+    -F "arquivo=@${TMPZIP};filename=${ZIPNAME};type=application/zip"
+  )
+  [[ -n "${EDICAO_PK}" ]] && MULTI+=( -F "edicao_pk=${EDICAO_PK}" )
+else
+  MULTI+=(
+    -H "Authorization: Bearer ${TOKEN}"
+    -F "arquivo=@${TMPZIP};filename=${ZIPNAME};type=application/zip"
+  )
+fi
+
+HTTP=$(curl "${MULTI[@]}" "${HEADER_ARGS[@]}" -o "${BODY}" \
+  -w '%{http_code}' "${URL}")
+
+echo ""
+echo -e "${BOLD}Resposta HTTP: ${HTTP}${RESET}"
+cat "${BODY}"
+echo ""
+
+if [[ "${HTTP}" != "200" ]]; then
+  error "Upload falhou (HTTP ${HTTP}). Ver JSON acima."
+fi
+
+OK=0
+if command -v jq &>/dev/null; then
+  jq -e '.ok == true' "${BODY}" &>/dev/null && OK=1 || true
+else
+  if python3 -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d.get('ok') is True else 1)" "${BODY}" 2>/dev/null; then OK=1; fi
+fi
+if [[ "${OK}" -eq 1 ]]; then
+  success "Entrega registada pela API."
+else
+  error "HTTP 200 mas campo ok não é true — conferir JSON acima."
+fi
+ENVIAR_SCRIPT
+
+if [ "$(id -u)" -eq 0 ]; then
+  cp /tmp/inovatech-enviar-entrega "${ENVIAR_BIN}"
+  chmod +x "${ENVIAR_BIN}"
+  success "Comando instalado: ${ENVIAR_BIN}"
+else
+  warn "Setup não está rodando como root — tentando sudo para inovatech-enviar-entrega..."
+  sudo cp /tmp/inovatech-enviar-entrega "${ENVIAR_BIN}" \
+    && sudo chmod +x "${ENVIAR_BIN}" \
+    && success "Comando instalado: ${ENVIAR_BIN}" \
+    || warn "Não foi possível instalar inovatech-enviar-entrega em /usr/local/bin."
+fi
+rm -f /tmp/inovatech-enviar-entrega 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+# 11. Embutir script inovatech-preparar-entrega
+# ---------------------------------------------------------------------------
+header "Instalando comando inovatech-preparar-entrega"
+
+PREP_BIN="/usr/local/bin/inovatech-preparar-entrega"
+
+cat > /tmp/inovatech-preparar-entrega << 'PREP_SCRIPT'
+#!/usr/bin/env bash
+# =============================================================================
+# INOVATECH – Preparar pasta de entrega
+#
+# Copia o backend e o frontend escolhidos pelo candidato para entrega_##,
+# recria .venv (Python) e node_modules (Node) para que tudo funcione
+# no novo caminho.
+# =============================================================================
+
+set -euo pipefail
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
+info()    { echo -e "${CYAN}[INFO]${RESET}  $*"; }
+success() { echo -e "${GREEN}[OK]${RESET}    $*"; }
+warn()    { echo -e "${YELLOW}[AVISO]${RESET} $*"; }
+error()   { echo -e "${RED}[ERRO]${RESET}  $*"; exit 1; }
+
+INV_ROOT="${HOME}/inovatech"
+[ -d "${INV_ROOT}" ] \
+  || error "Diretório ${INV_ROOT} não encontrado."
+
+echo ""
+echo -e "${BOLD}${CYAN}======================================${RESET}"
+echo -e "${BOLD}${CYAN}  INOVATECH – Preparar Entrega${RESET}"
+echo -e "${BOLD}${CYAN}======================================${RESET}"
+echo ""
+
+# ── Código do candidato ──────────────────────────────────────────────────
+read -rp "  Seu código PP (01 a 40): " CODIGO_PP
+CODIGO_PP=$(echo "${CODIGO_PP}" | xargs)
+[[ "${CODIGO_PP}" =~ ^[0-9]{1,2}$ ]] \
+  || error "Código PP inválido. Use um número de 01 a 40."
+CODIGO_PP=$(printf "%02d" "${CODIGO_PP}")
+
+ENTREGA_DIR="${INV_ROOT}/entrega_${CODIGO_PP}"
+
+if [ -d "${ENTREGA_DIR}" ]; then
+  warn "Pasta ${ENTREGA_DIR} já existe."
+  read -rp "  Deseja continuar e sobrescrever? (s/N): " CONFIRM
+  [[ "${CONFIRM}" =~ ^[sS]$ ]] || { info "Cancelado."; exit 0; }
+fi
+
+mkdir -p "${ENTREGA_DIR}"
+
+# ── Backend ──────────────────────────────────────────────────────────────
+echo ""
+echo -e "${BOLD}Qual backend você está usando?${RESET}"
+echo "  1) Django + DRF        (backend-django)"
+echo "  2) FastAPI + SQLModel   (backend-fastapi)"
+echo "  3) Express + TypeORM    (backend-express)"
+read -rp "  Opção (1/2/3): " BACK_OPT
+
+case "${BACK_OPT}" in
+  1) BACK_NAME="backend-django"  ;;
+  2) BACK_NAME="backend-fastapi" ;;
+  3) BACK_NAME="backend-express" ;;
+  *) error "Opção inválida." ;;
+esac
+
+BACK_SRC="${INV_ROOT}/${BACK_NAME}"
+[ -d "${BACK_SRC}" ] \
+  || error "Pasta ${BACK_SRC} não encontrada."
+
+# ── Frontend ─────────────────────────────────────────────────────────────
+echo ""
+echo -e "${BOLD}Qual frontend você está usando?${RESET}"
+echo "  1) React + TypeScript   (frontend-react)"
+echo "  2) Vanilla + TypeScript (frontend-vanilla)"
+read -rp "  Opção (1/2): " FRONT_OPT
+
+case "${FRONT_OPT}" in
+  1) FRONT_NAME="frontend-react"   ;;
+  2) FRONT_NAME="frontend-vanilla" ;;
+  *) error "Opção inválida." ;;
+esac
+
+FRONT_SRC="${INV_ROOT}/${FRONT_NAME}"
+[ -d "${FRONT_SRC}" ] \
+  || error "Pasta ${FRONT_SRC} não encontrada."
+
+# ── Copiar backend (sem .venv, __pycache__, *.db, *.sqlite3) ────────────
+echo ""
+info "Copiando ${BACK_NAME} → ${ENTREGA_DIR}/${BACK_NAME}/"
+rsync -a --delete \
+  --exclude '.venv' \
+  --exclude '__pycache__' \
+  --exclude '*.pyc' \
+  --exclude '*.pyo' \
+  --exclude '*.sqlite3' \
+  --exclude '*.db' \
+  --exclude 'node_modules' \
+  --exclude '.DS_Store' \
+  "${BACK_SRC}/" "${ENTREGA_DIR}/${BACK_NAME}/"
+
+# ── Copiar frontend (sem node_modules, dist) ────────────────────────────
+info "Copiando ${FRONT_NAME} → ${ENTREGA_DIR}/${FRONT_NAME}/"
+rsync -a --delete \
+  --exclude 'node_modules' \
+  --exclude 'dist' \
+  --exclude '.DS_Store' \
+  "${FRONT_SRC}/" "${ENTREGA_DIR}/${FRONT_NAME}/"
+
+# ── Recriar .venv do backend Python ─────────────────────────────────────
+DEST_BACK="${ENTREGA_DIR}/${BACK_NAME}"
+
+if [[ "${BACK_NAME}" == backend-django || "${BACK_NAME}" == backend-fastapi ]]; then
+  info "Recriando .venv em ${DEST_BACK}/ ..."
+
+  PYTHON312=""
+  for p in python3.12 python3; do
+    if command -v "$p" &>/dev/null; then
+      PYTHON312="$p"; break
+    fi
+  done
+  [ -n "${PYTHON312}" ] || error "Python 3.12 não encontrado no PATH."
+
+  UV=""
+  if command -v uv &>/dev/null; then
+    UV=$(command -v uv)
+  fi
+
+  if [ -n "${UV}" ]; then
+    "${UV}" venv "${DEST_BACK}/.venv" --python "${PYTHON312}" --quiet
+
+    if [ -f "${BACK_SRC}/requirements.txt" ]; then
+      "${UV}" pip install \
+        --python "${DEST_BACK}/.venv/bin/python" \
+        -r "${BACK_SRC}/requirements.txt" --quiet
+    else
+      OLD_REQS=$("${BACK_SRC}/.venv/bin/pip" freeze 2>/dev/null || true)
+      if [ -n "${OLD_REQS}" ]; then
+        echo "${OLD_REQS}" | "${UV}" pip install \
+          --python "${DEST_BACK}/.venv/bin/python" \
+          -r /dev/stdin --quiet
+      else
+        warn "Sem requirements.txt e sem .venv original — .venv vazio."
+        warn "Instale os pacotes manualmente: cd ${DEST_BACK} && source .venv/bin/activate && pip install ..."
+      fi
+    fi
+    success ".venv recriado com $(${DEST_BACK}/.venv/bin/python --version)"
+  else
+    warn "uv não encontrado — criando .venv com venv padrão..."
+    "${PYTHON312}" -m venv "${DEST_BACK}/.venv"
+
+    if [ -f "${BACK_SRC}/requirements.txt" ]; then
+      "${DEST_BACK}/.venv/bin/pip" install -q \
+        -r "${BACK_SRC}/requirements.txt"
+    else
+      OLD_REQS=$("${BACK_SRC}/.venv/bin/pip" freeze 2>/dev/null || true)
+      if [ -n "${OLD_REQS}" ]; then
+        echo "${OLD_REQS}" | "${DEST_BACK}/.venv/bin/pip" install -q \
+          -r /dev/stdin
+      fi
+    fi
+    success ".venv recriado (sem uv, pode ter sido mais lento)."
+  fi
+fi
+
+# ── Recriar node_modules do frontend ────────────────────────────────────
+DEST_FRONT="${ENTREGA_DIR}/${FRONT_NAME}"
+info "Instalando dependências em ${DEST_FRONT}/ ..."
+cd "${DEST_FRONT}"
+
+export NVM_DIR="${HOME}/.nvm"
+# shellcheck disable=SC1091
+[ -s "${NVM_DIR}/nvm.sh" ] && . "${NVM_DIR}/nvm.sh"
+nvm use 2>/dev/null || true
+
+npm install --quiet 2>/dev/null
+success "node_modules instalado."
+
+# ── Recriar node_modules do backend Express (se for o caso) ─────────────
+if [[ "${BACK_NAME}" == "backend-express" ]]; then
+  info "Instalando dependências do Express em ${DEST_BACK}/ ..."
+  cd "${DEST_BACK}"
+  npm install --quiet 2>/dev/null
+  success "node_modules do Express instalado."
+fi
+
+# ── Resumo ───────────────────────────────────────────────────────────────
+echo ""
+echo -e "${BOLD}${GREEN}======================================${RESET}"
+echo -e "${BOLD}${GREEN}  Entrega preparada com sucesso!${RESET}"
+echo -e "${BOLD}${GREEN}======================================${RESET}"
+echo ""
+echo -e "  Pasta   : ${BOLD}${ENTREGA_DIR}${RESET}"
+echo -e "  Backend : ${BOLD}${BACK_NAME}${RESET}"
+echo -e "  Frontend: ${BOLD}${FRONT_NAME}${RESET}"
+echo ""
+echo -e "  Continue desenvolvendo dentro de ${BOLD}${ENTREGA_DIR}${RESET}."
+echo -e "  Ao finalizar, rode: ${BOLD}inovatech-submit${RESET}"
+echo ""
+info "Dica: se precisar rodar o backend Python:"
+echo "    cd ${DEST_BACK} && source .venv/bin/activate"
+echo ""
+info "Dica: se precisar rodar o frontend:"
+echo "    cd ${DEST_FRONT} && npm run dev"
+echo ""
+PREP_SCRIPT
+
+if [ "$(id -u)" -eq 0 ]; then
+  cp /tmp/inovatech-preparar-entrega "${PREP_BIN}"
+  chmod +x "${PREP_BIN}"
+  success "Comando instalado: ${PREP_BIN}"
+else
+  warn "Setup não está rodando como root — tentando sudo..."
+  sudo cp /tmp/inovatech-preparar-entrega "${PREP_BIN}" \
+    && sudo chmod +x "${PREP_BIN}" \
+    && success "Comando instalado: ${PREP_BIN}" \
+    || warn "Não foi possível instalar em /usr/local/bin; use" \
+" /tmp/inovatech-preparar-entrega (caminho completo)."
+fi
+
+# ---------------------------------------------------------------------------
+# 12. Embutir script inovatech-seal
 # ---------------------------------------------------------------------------
 header "Instalando comando inovatech-seal"
 
@@ -2106,6 +2662,17 @@ sha256() {
   else
     shasum -a 256 "$@"
   fi
+}
+
+inovatech_ascii_banner() {
+  cat << 'INVASCII'
+██╗███╗   ██╗ ██████╗ ██╗   ██╗ █████╗ ████████╗███████╗ ██████╗██╗  ██╗
+██║████╗  ██║██╔═══██╗██║   ██║██╔══██╗╚══██╔══╝██╔════╝██╔════╝██║  ██║
+██║██╔██╗ ██║██║   ██║██║   ██║███████║   ██║   █████╗  ██║     ███████║
+██║██║╚██╗██║██║   ██║╚██╗ ██╔╝██╔══██║   ██║   ██╔══╝  ██║     ██╔══██║
+██║██║ ╚████║╚██████╔╝ ╚████╔╝ ██║  ██║   ██║   ███████╗╚██████╗██║  ██║
+╚═╝╚═╝  ╚═══╝ ╚═════╝   ╚═══╝  ╚═╝  ╚═╝   ╚═╝   ╚══════╝ ╚═════╝╚═╝  ╚═╝
+INVASCII
 }
 
 BASE_DIR="$(pwd)"
@@ -2140,6 +2707,9 @@ PROJECT_DIRS=(
   "frontend-react"
 )
 
+echo ""
+inovatech_ascii_banner
+echo ""
 header "INOVATECH – Selagem dos Projetos Base"
 info "Diretório base : ${BASE_DIR}"
 info "Data/Hora      : ${TIMESTAMP}"
@@ -2299,6 +2869,17 @@ success() { echo -e "${GREEN}[OK]${RESET}    $*"; }
 warn()    { echo -e "${YELLOW}[AVISO]${RESET} $*"; }
 error()   { echo -e "${RED}[ERRO]${RESET}  $*"; exit 1; }
 
+inovatech_ascii_banner() {
+  cat << 'INVASCII'
+██╗███╗   ██╗ ██████╗ ██╗   ██╗ █████╗ ████████╗███████╗ ██████╗██╗  ██╗
+██║████╗  ██║██╔═══██╗██║   ██║██╔══██╗╚══██╔══╝██╔════╝██╔════╝██║  ██║
+██║██╔██╗ ██║██║   ██║██║   ██║███████║   ██║   █████╗  ██║     ███████║
+██║██║╚██╗██║██║   ██║╚██╗ ██╔╝██╔══██║   ██║   ██╔══╝  ██║     ██╔══██║
+██║██║ ╚████║╚██████╔╝ ╚████╔╝ ██║  ██║   ██║   ███████╗╚██████╗██║  ██║
+╚═╝╚═╝  ╚═══╝ ╚═════╝   ╚═══╝  ╚═╝  ╚═╝   ╚═╝   ╚══════╝ ╚═════╝╚═╝  ╚═╝
+INVASCII
+}
+
 sha256() {
   if command -v sha256sum &>/dev/null; then
     sha256sum "$@"
@@ -2325,6 +2906,8 @@ PROJECT_DIRS=(
   "frontend-react"
 )
 
+echo ""
+inovatech_ascii_banner
 echo ""
 echo -e "${BOLD}${CYAN}======================================${RESET}"
 echo -e "${BOLD}${CYAN}  INOVATECH – Verificação de Integridade${RESET}"
@@ -2525,6 +3108,16 @@ for k in sys.argv[2:]:
   fi
 }
 
+cat << 'INVASCII'
+██╗███╗   ██╗ ██████╗ ██╗   ██╗ █████╗ ████████╗███████╗ ██████╗██╗  ██╗
+██║████╗  ██║██╔═══██╗██║   ██║██╔══██╗╚══██╔══╝██╔════╝██╔════╝██║  ██║
+██║██╔██╗ ██║██║   ██║██║   ██║███████║   ██║   █████╗  ██║     ███████║
+██║██║╚██╗██║██║   ██║╚██╗ ██╔╝██╔══██║   ██║   ██╔══╝  ██║     ██╔══██║
+██║██║ ╚████║╚██████╔╝ ╚████╔╝ ██║  ██║   ██║   ███████╗╚██████╗██║  ██║
+╚═╝╚═╝  ╚═══╝ ╚═════╝   ╚═══╝  ╚═╝  ╚═╝   ╚═╝   ╚══════╝ ╚═════╝╚═╝  ╚═╝
+INVASCII
+
+echo ""
 echo "INOVATECH – versões principais (base: ${BASE_DIR})"
 echo ""
 
@@ -2645,7 +3238,10 @@ echo -e "${BOLD}Comandos (execute no terminal, em ${BASE_DIR}):${RESET}"
 echo ""
 echo -e "  ${GREEN}✔${RESET}  ${BOLD}inovatech-verify${RESET}    → candidato confere hash de integridade"
 echo -e "  ${GREEN}✔${RESET}  ${BOLD}inovatech-versions${RESET}  → confere versões do ambiente (candidato)"
+echo -e "  ${GREEN}✔${RESET}  ${BOLD}inovatech-preparar-entrega${RESET} → copia stack para entrega_## e recria ambientes"
 echo -e "  ${GREEN}✔${RESET}  ${BOLD}inovatech-submit${RESET}    → gera comprovante (candidato)"
+echo -e "  ${GREEN}✔${RESET}  ${BOLD}inovatech-enviar-entrega${RESET} → envia ZIP ao portal via HTTPS" \
+" (comissão, após liberar internet; ver gabaritos/ENTREGA-PROVA-PRATICA-API.md)"
 echo -e "  ${GREEN}✔${RESET}  ${BOLD}inovatech-seal${RESET}      → selagem única (coordenação); binário" \
 " é removido após uso"
 echo ""
@@ -2675,12 +3271,19 @@ echo ""
 echo -e "  ${CYAN}2. Candidato${RESET} pode rodar: ${BOLD}inovatech-versions${RESET} p/ checar" \
 " dependências (opcional, antes ou durante a prova)."
 echo ""
-echo -e "  ${CYAN}3. Candidatos${RESET} desenvolvem em entrega (renomeada na prova"
-echo "     para entrega_##, 01 a 40, nota técnica). inovatech-submit ajusta a"
-echo "     pasta sozinho se houver uma só; senão, inovatech-submit --dir …/entrega_##"
+echo -e "  ${CYAN}3. Candidato${RESET} roda ${BOLD}inovatech-preparar-entrega${RESET} — escolhe backend"
+echo "     e frontend, informa código PP. O comando copia a stack para"
+echo "     entrega_## e recria .venv/node_modules automaticamente."
 echo ""
-echo -e "  ${CYAN}4. Ao encerrar${RESET}, cada candidato: ${BOLD}inovatech-submit${RESET}, informa" \
+echo -e "  ${CYAN}4. Candidato${RESET} desenvolve dentro de ${BOLD}entrega_##/${RESET}."
+echo "     Tudo funciona normalmente (caminhos relativos, servers, etc.)."
+echo ""
+echo -e "  ${CYAN}5. Ao encerrar${RESET}, cada candidato: ${BOLD}inovatech-submit${RESET}, informa" \
 " nome e código PP, e anota o hash."
+echo ""
+echo -e "  ${CYAN}6. Comissão${RESET} (com internet restaurada): ${BOLD}inovatech-enviar-entrega${RESET}" \
+" — envia a pasta de entrega (ZIP) à API; modo laboratório: nome + posição na" \
+" classificação (e segredo/edição conforme doc da API)."
 echo ""
 success "Setup INOVATECH finalizado — ${SETUP_DATE}"
 }
