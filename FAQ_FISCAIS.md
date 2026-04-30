@@ -2,6 +2,9 @@
 
 Este documento contém orientações para os fiscais de laboratório sobre o fluxo esperado e como agir em situações inesperadas durante a execução dos comandos de preparação e entrega da prova prática (`inovatech-preparar-entrega` e `inovatech-submit`).
 
+**Atualização do ambiente** (reset para a versão atual do setup, com nova selagem):
+veja [INSTRUCOES_ATUALIZACAO_LAB.md](INSTRUCOES_ATUALIZACAO_LAB.md).
+
 ---
 
 ## 🧭 Guia Geral: Fluxo do Candidato

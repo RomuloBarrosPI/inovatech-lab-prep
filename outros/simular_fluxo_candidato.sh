@@ -17,6 +17,9 @@
 #   outros/testar_todas_combinacoes_lab.sh
 #
 # Variáveis opcionais (laboratório = ~/inovatech, como no preparar-entrega):
+#   INOVATECH_ROOT          raiz do lab (default: ${HOME}/inovatech); ajusta
+#                           HOME para o diretório pai se necessário.
+#   INOVATECH_NVM_DIR       NVM_DIR (default: ~/.nvm antes do ajuste de HOME)
 #   INOVATECH_CODIGO_PP     código 01–40 (default: 01)
 #   INOVATECH_NOME_COMPLETO nome no comprovante (default abaixo)
 #   INOVATECH_BACKEND_OPT   1=Django, 2=FastAPI, 3=Express (default: 1)
@@ -26,8 +29,18 @@
 
 set -euo pipefail
 
-# inovatech-preparar-entrega embutido no setup usa HOME/inovatech fixo.
+ORIG_HOME="${HOME}"
+INV_ROOT="${INOVATECH_ROOT:-${HOME}/inovatech}"
+if [[ "$(cd "${INV_ROOT}/.." && pwd)" != "$(cd "${ORIG_HOME}" && pwd)" ]]; then
+  export HOME="$(cd "${INV_ROOT}/.." && pwd)"
+fi
 INV_ROOT="${HOME}/inovatech"
+export NVM_DIR="${INOVATECH_NVM_DIR:-${ORIG_HOME}/.nvm}"
+if [[ -s "${NVM_DIR}/nvm.sh" ]]; then
+  # shellcheck disable=SC1090
+  source "${NVM_DIR}/nvm.sh"
+  nvm use 2>/dev/null || true
+fi
 COD_IN="${INOVATECH_CODIGO_PP:-01}"
 NOME="${INOVATECH_NOME_COMPLETO:-Candidato Teste Integração}"
 BACK_OPT="${INOVATECH_BACKEND_OPT:-1}"

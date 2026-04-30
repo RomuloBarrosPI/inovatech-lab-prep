@@ -14,6 +14,8 @@
 # internet). npm/pip já devem estar satisfeitos pelo preparar-entrega.
 #
 # Variáveis opcionais:
+#   INOVATECH_ROOT             raiz do laboratório (default: ${HOME}/inovatech).
+#   INOVATECH_NVM_DIR          NVM_DIR (default: ~/.nvm do login original)
 #   INOVATECH_CODIGO_INICIAL   primeiro código PP usado (default: 31 → …36)
 #   INOVATECH_NOME_COMPLETO    nome no comprovante (default abaixo)
 #   INOVATECH_SKIP_SUBMIT      1=pula inovatech-submit (default: 0)
@@ -24,7 +26,13 @@
 
 set -euo pipefail
 
+ORIG_HOME="${HOME}"
+INV_ROOT="${INOVATECH_ROOT:-${HOME}/inovatech}"
+if [[ "$(cd "${INV_ROOT}/.." && pwd)" != "$(cd "${ORIG_HOME}" && pwd)" ]]; then
+  export HOME="$(cd "${INV_ROOT}/.." && pwd)"
+fi
 INV_ROOT="${HOME}/inovatech"
+export NVM_DIR="${INOVATECH_NVM_DIR:-${ORIG_HOME}/.nvm}"
 NOME="${INOVATECH_NOME_COMPLETO:-Auditoria Combinações Lab}"
 COD_START="${INOVATECH_CODIGO_INICIAL:-31}"
 SKIP_SUBMIT="${INOVATECH_SKIP_SUBMIT:-0}"
@@ -48,10 +56,8 @@ if (( 10#${COD_START} > 35 )); then
   die "INOVATECH_CODIGO_INICIAL deve ser ≤ 35 (são 6 códigos consecutivos até 40)."
 fi
 
-# shellcheck disable=SC1091
-export NVM_DIR="${HOME}/.nvm"
 if [[ -s "${NVM_DIR}/nvm.sh" ]]; then
-  # shellcheck disable=SC1090
+  # shellcheck disable=SC1090,SC1091
   source "${NVM_DIR}/nvm.sh"
   nvm use 2>/dev/null || true
 fi
