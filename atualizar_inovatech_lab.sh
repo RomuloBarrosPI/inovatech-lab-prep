@@ -160,7 +160,8 @@ install_bins_from_setup_file() {
 
   local td
   td="$(mktemp -d)"
-  trap 'rm -rf "${td}"' RETURN
+  # Congelar o caminho aqui: no RETURN, variáveis locais já não existem (set -u).
+  trap "rm -rf '${td}'" RETURN
 
   awk '
     /^cat > \/tmp\/inovatech-submit << .SUBMIT_SCRIPT.$/ {skip=1; next}
@@ -217,6 +218,8 @@ install_bins_from_setup_file() {
     sudo chmod +x /usr/local/bin/inovatech-*
   fi
   say "Comandos inovatech-* instalados em /usr/local/bin."
+  rm -rf "${td}"
+  trap - RETURN
 }
 
 run_online_update() {
