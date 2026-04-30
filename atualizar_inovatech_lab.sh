@@ -237,7 +237,8 @@ run_online_update() {
   mkdir -p "${LAB_ROOT}"
   local setup_tmp
   setup_tmp="$(mktemp)"
-  trap 'rm -f "${setup_tmp}"' EXIT
+  # Caminho congelado: no EXIT global, locals desta função já não existem.
+  trap "rm -f '${setup_tmp}'" EXIT
   obtain_setup_to "${setup_tmp}"
   bash -n "${setup_tmp}" || die "setup obtido falhou em bash -n."
 
@@ -258,6 +259,8 @@ run_online_update() {
   ( cd "${LAB_ROOT}" && inovatech-verify --dir "${LAB_ROOT}" )
 
   say "Atualização online concluída."
+  rm -f "${setup_tmp}"
+  trap - EXIT
 }
 
 resolve_offline_staging() {
