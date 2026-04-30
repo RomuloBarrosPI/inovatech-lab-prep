@@ -28,6 +28,11 @@ cd ~/inovatech
 curl -fsSL https://raw.githubusercontent.com/RomuloBarrosPI/inovatech-lab-prep/main/atualizar_inovatech_lab.sh | bash -s -- --yes
 ```
 
+Confira se essa URL reflete a última revisão no GitHub (`git pull` no clone e
+compare, ou abra o raw no navegador). O `curl` sempre baixa o que está em
+`main`; alterações só no clone local só valem se você **enviar commit e push**
+ou usar o caminho local abaixo.
+
 Opções úteis:
 
 - `--setup-src /caminho/setup_inovatech.sh` — não baixa da rede.

@@ -158,68 +158,70 @@ install_bins_from_setup_file() {
   local setup_file="$1"
   [[ -s "${setup_file}" ]] || die "Arquivo de setup vazio ou ausente."
 
-  local td
-  td="$(mktemp -d)"
-  # Congelar o caminho aqui: no RETURN, variáveis locais já não existem (set -u).
-  trap "rm -rf '${td}'" RETURN
+  # Subshell: trap EXIT não dispara ao retornar de say/inner; evita set -u em
+  # RETURN aninhado (bug ao usar trap RETURN + funções locais).
+  (
+    set -euo pipefail
+    local td
+    td="$(mktemp -d)"
+    trap 'rm -rf "${td}"' EXIT
 
-  awk '
-    /^cat > \/tmp\/inovatech-submit << .SUBMIT_SCRIPT.$/ {skip=1; next}
-    skip && /^SUBMIT_SCRIPT$/ {exit}
-    skip {print}
-  ' "${setup_file}" > "${td}/inovatech-submit"
-  awk '
-    /^cat > \/tmp\/inovatech-enviar-entrega << .ENVIAR_SCRIPT.$/ {skip=1; next}
-    skip && /^ENVIAR_SCRIPT$/ {exit}
-    skip {print}
-  ' "${setup_file}" > "${td}/inovatech-enviar-entrega"
-  awk '
-    /^cat > \/tmp\/inovatech-preparar-entrega << .PREP_SCRIPT.$/ {skip=1; next}
-    skip && /^PREP_SCRIPT$/ {exit}
-    skip {print}
-  ' "${setup_file}" > "${td}/inovatech-preparar-entrega"
-  awk '
-    /^cat > \/tmp\/inovatech-seal << .SEAL_SCRIPT.$/ {skip=1; next}
-    skip && /^SEAL_SCRIPT$/ {exit}
-    skip {print}
-  ' "${setup_file}" > "${td}/inovatech-seal"
-  awk '
-    /^cat > \/tmp\/inovatech-verify << .VERIFY_SCRIPT.$/ {skip=1; next}
-    skip && /^VERIFY_SCRIPT$/ {exit}
-    skip {print}
-  ' "${setup_file}" > "${td}/inovatech-verify"
-  awk '
-    /^cat > \/tmp\/inovatech-versions << .VERSIONS_SCRIPT.$/ {skip=1; next}
-    skip && /^VERSIONS_SCRIPT$/ {exit}
-    skip {print}
-  ' "${setup_file}" > "${td}/inovatech-versions"
+    awk '
+      /^cat > \/tmp\/inovatech-submit << .SUBMIT_SCRIPT.$/ {skip=1; next}
+      skip && /^SUBMIT_SCRIPT$/ {exit}
+      skip {print}
+    ' "${setup_file}" > "${td}/inovatech-submit"
+    awk '
+      /^cat > \/tmp\/inovatech-enviar-entrega << .ENVIAR_SCRIPT.$/ {skip=1; next}
+      skip && /^ENVIAR_SCRIPT$/ {exit}
+      skip {print}
+    ' "${setup_file}" > "${td}/inovatech-enviar-entrega"
+    awk '
+      /^cat > \/tmp\/inovatech-preparar-entrega << .PREP_SCRIPT.$/ {skip=1; next}
+      skip && /^PREP_SCRIPT$/ {exit}
+      skip {print}
+    ' "${setup_file}" > "${td}/inovatech-preparar-entrega"
+    awk '
+      /^cat > \/tmp\/inovatech-seal << .SEAL_SCRIPT.$/ {skip=1; next}
+      skip && /^SEAL_SCRIPT$/ {exit}
+      skip {print}
+    ' "${setup_file}" > "${td}/inovatech-seal"
+    awk '
+      /^cat > \/tmp\/inovatech-verify << .VERIFY_SCRIPT.$/ {skip=1; next}
+      skip && /^VERIFY_SCRIPT$/ {exit}
+      skip {print}
+    ' "${setup_file}" > "${td}/inovatech-verify"
+    awk '
+      /^cat > \/tmp\/inovatech-versions << .VERSIONS_SCRIPT.$/ {skip=1; next}
+      skip && /^VERSIONS_SCRIPT$/ {exit}
+      skip {print}
+    ' "${setup_file}" > "${td}/inovatech-versions"
 
-  local f
-  for f in submit enviar-entrega preparar-entrega seal verify versions; do
-    [[ -s "${td}/inovatech-${f}" ]] || die "Extração falhou: inovatech-${f}"
-    chmod +x "${td}/inovatech-${f}"
-  done
+    local f
+    for f in submit enviar-entrega preparar-entrega seal verify versions; do
+      [[ -s "${td}/inovatech-${f}" ]] || exit 1
+      chmod +x "${td}/inovatech-${f}"
+    done
 
-  if [[ "$(id -u)" -eq 0 ]]; then
-    cp "${td}/inovatech-submit" /usr/local/bin/
-    cp "${td}/inovatech-enviar-entrega" /usr/local/bin/
-    cp "${td}/inovatech-preparar-entrega" /usr/local/bin/
-    cp "${td}/inovatech-seal" /usr/local/bin/
-    cp "${td}/inovatech-verify" /usr/local/bin/
-    cp "${td}/inovatech-versions" /usr/local/bin/
-    chmod +x /usr/local/bin/inovatech-*
-  else
-    sudo cp "${td}/inovatech-submit" /usr/local/bin/
-    sudo cp "${td}/inovatech-enviar-entrega" /usr/local/bin/
-    sudo cp "${td}/inovatech-preparar-entrega" /usr/local/bin/
-    sudo cp "${td}/inovatech-seal" /usr/local/bin/
-    sudo cp "${td}/inovatech-verify" /usr/local/bin/
-    sudo cp "${td}/inovatech-versions" /usr/local/bin/
-    sudo chmod +x /usr/local/bin/inovatech-*
-  fi
-  say "Comandos inovatech-* instalados em /usr/local/bin."
-  rm -rf "${td}"
-  trap - RETURN
+    if [[ "$(id -u)" -eq 0 ]]; then
+      cp "${td}/inovatech-submit" /usr/local/bin/
+      cp "${td}/inovatech-enviar-entrega" /usr/local/bin/
+      cp "${td}/inovatech-preparar-entrega" /usr/local/bin/
+      cp "${td}/inovatech-seal" /usr/local/bin/
+      cp "${td}/inovatech-verify" /usr/local/bin/
+      cp "${td}/inovatech-versions" /usr/local/bin/
+      chmod +x /usr/local/bin/inovatech-*
+    else
+      sudo cp "${td}/inovatech-submit" /usr/local/bin/
+      sudo cp "${td}/inovatech-enviar-entrega" /usr/local/bin/
+      sudo cp "${td}/inovatech-preparar-entrega" /usr/local/bin/
+      sudo cp "${td}/inovatech-seal" /usr/local/bin/
+      sudo cp "${td}/inovatech-verify" /usr/local/bin/
+      sudo cp "${td}/inovatech-versions" /usr/local/bin/
+      sudo chmod +x /usr/local/bin/inovatech-*
+    fi
+    say "Comandos inovatech-* instalados em /usr/local/bin."
+  ) || die "Falha ao instalar comandos inovatech-* a partir do setup."
 }
 
 run_online_update() {
