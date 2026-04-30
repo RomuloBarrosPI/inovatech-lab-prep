@@ -235,31 +235,31 @@ run_online_update() {
   confirm_reset
 
   mkdir -p "${LAB_ROOT}"
-  local setup_tmp
-  setup_tmp="$(mktemp)"
-  # Caminho congelado: no EXIT global, locals desta função já não existem.
-  trap "rm -f '${setup_tmp}'" EXIT
-  obtain_setup_to "${setup_tmp}"
-  bash -n "${setup_tmp}" || die "setup obtido falhou em bash -n."
+  # Global: trap EXIT corre no fim do shell; locals de run_online_update já sumiram.
+  _ATU_SETUP_TMP="$(mktemp)" || die "mktemp falhou."
+  trap 'rm -f "${_ATU_SETUP_TMP:-}"' EXIT
+  obtain_setup_to "${_ATU_SETUP_TMP}"
+  bash -n "${_ATU_SETUP_TMP}" || die "setup obtido falhou em bash -n."
 
   (
     cd "${LAB_ROOT}"
     export INOVATECH_LAB_RESET=1
-    bash "${setup_tmp}"
+    bash "${_ATU_SETUP_TMP}"
   )
 
   if [[ "${NO_SEAL}" != "1" ]]; then
     say "Executando inovatech-seal..."
     ( cd "${LAB_ROOT}" && inovatech-seal --dir "${LAB_ROOT}" )
     # Selagem remove o binário seal; reinstalar todos para próxima manutenção.
-    install_bins_from_setup_file "${setup_tmp}"
+    install_bins_from_setup_file "${_ATU_SETUP_TMP}"
   fi
 
   say "Executando inovatech-verify..."
   ( cd "${LAB_ROOT}" && inovatech-verify --dir "${LAB_ROOT}" )
 
   say "Atualização online concluída."
-  rm -f "${setup_tmp}"
+  rm -f "${_ATU_SETUP_TMP}"
+  unset _ATU_SETUP_TMP
   trap - EXIT
 }
 
