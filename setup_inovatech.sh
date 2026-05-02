@@ -2455,6 +2455,30 @@ fi
 ZIPNAME="inovatech_entrega_${CODZIP:-na}_${DATESTAMP}.zip"
 info "ZIP: ${ZS} bytes → ${ZIPNAME}"
 
+# ---- Backup no Pendrive ----
+info "Tentando realizar backup do ZIP no pendrive..."
+BACKUP_DONE=0
+shopt -s nullglob
+for pd in /media/*/*; do
+  if [[ -d "$pd" ]]; then
+    BKP_DIR="${pd}/inovatech_backups"
+    if mkdir -p "${BKP_DIR}" 2>/dev/null; then
+      SAFE_NOME=$(echo "${NOME}" | sed -E 's/[^a-zA-Z0-9]+/_/g')
+      BKP_FILE="${BKP_DIR}/entrega_${CODIGO}_${SAFE_NOME}_${DATESTAMP}.zip"
+      if cp "${TMPZIP}" "${BKP_FILE}" 2>/dev/null; then
+        success "Backup salvo em: ${BKP_FILE}"
+        BACKUP_DONE=1
+        break
+      fi
+    fi
+  fi
+done
+shopt -u nullglob
+
+if [[ "${BACKUP_DONE}" -eq 0 ]]; then
+  warn "Não foi possível salvar o backup em um pendrive (nenhum encontrado ou sem permissão)."
+fi
+
 if [[ "${LAB}" -eq 1 ]]; then
   NOME="$(echo "${NOME}" | xargs)"
   CODIGO="$(echo "${CODIGO}" | xargs)"
