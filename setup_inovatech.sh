@@ -2379,6 +2379,7 @@ fi
 
 DATESTAMP=$(date '+%Y%m%d_%H%M%S')
 TMPZIP="$(mktemp /tmp/inovatech_entrega_XXXXXX.zip)"
+rm -f "${TMPZIP}" # zip falha com "Zip file structure invalid" se o arquivo existir e tiver 0 bytes
 BODY="$(mktemp)"
 trap 'rm -f "${TMPZIP}" "${BODY}" 2>/dev/null' EXIT
 
